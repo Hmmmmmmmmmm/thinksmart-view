@@ -33,6 +33,8 @@
 		<string>q8_0</string>
 		<string>-ctv</string>
 		<string>q8_0</string>
+		<string>--sleep-idle-seconds</string>
+		<string>600</string>
 		<string>--cache-ram</string>
 		<string>0</string>
 	</array>
