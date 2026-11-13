@@ -60,7 +60,7 @@
   .app{contain:layout style paint;transition:visibility 0s linear 0s}
   html.ts-homeload .app{visibility:hidden!important;pointer-events:none!important;transition:none!important}
   html.ts-xz-covered .app{visibility:hidden!important;pointer-events:none!important;transition:visibility 0s linear .14s}
-  html.ts-xz-covered body>*:not(#tsHomeLayer):not(#tsSubLayer):not(#tsMsgCard):not(#tsBrightnessPanel):not(#tsBrightnessShade):not(#settings):not(#wifi):not(#toast):not(#hud):not(#powerOff):not(.tskb-dock):not(style):not(script){visibility:hidden!important;pointer-events:none!important;transition:visibility 0s linear .14s}
+  html.ts-xz-covered body>*:not(#tsHomeLayer):not(#tsSubLayer):not(#tsMsgCard):not(#tsVoicePill):not(#tsBrightnessPanel):not(#tsBrightnessShade):not(#settings):not(#wifi):not(#toast):not(#hud):not(#powerOff):not(.tskb-dock):not(style):not(script){visibility:hidden!important;pointer-events:none!important;transition:visibility 0s linear .14s}
   html.ts-home #settings,html.ts-home #wifi{z-index:9200;contain:strict;transform:translate3d(0,0,0);backface-visibility:hidden;transition:opacity .115s cubic-bezier(.4,0,.2,1)!important}
   html.ts-home #wifi{z-index:9205}
   html.ts-home #settings.on,html.ts-home #wifi.on{transition:opacity .14s cubic-bezier(.22,1,.36,1)!important}
@@ -73,6 +73,12 @@
   #tsHomeBtn{height:56px;padding:0 22px;border-radius:18px;font-size:20px}
   #tsHomeBtn:active,#tsBrightness:active{background:#263d5b;transform:scale(.95);transition:transform .05s ease-out,background-color .05s ease}#tsHomeBtn svg,#tsBrightness svg{width:22px;height:22px;color:#81cefc;flex-shrink:0}#tsHomeBtn svg{width:24px;height:24px}
   #tsHomeBtn.fixed{position:fixed;top:20px;right:24px;z-index:15}
+  #tsVoicePill{position:fixed;top:14px;left:50%;z-index:9450;transform:translate3d(-50%,-14px,0);display:flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:999px;border:1px solid rgba(129,206,252,.38);background:rgba(16,26,43,.92);color:#eef5ff;font:700 18px -apple-system,BlinkMacSystemFont,"Noto Sans CJK SC",sans-serif;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:0;visibility:hidden;pointer-events:none;cursor:pointer;touch-action:manipulation;transition:opacity .13s ease,transform .13s cubic-bezier(.22,1,.36,1),visibility 0s linear .13s}
+  #tsVoicePill.show{opacity:1;visibility:visible;pointer-events:auto;transform:translate3d(-50%,0,0);transition:opacity .13s ease,transform .13s cubic-bezier(.22,1,.36,1),visibility 0s linear 0s}
+  #tsVoicePill i{width:10px;height:10px;border-radius:50%;background:#4ade80;flex-shrink:0}
+  #tsVoicePill[data-st="connecting"] i{background:#7dd3fc}
+  #tsVoicePill[data-st="thinking"] i{background:#fbbf24}
+  #tsVoicePill[data-st="speaking"] i{background:#60a5fa}
   #tsBrightness.monitor-brightness{height:48px;border-radius:13px;font-size:19.5px;font-weight:700;padding:0 19px;gap:9px;border:1px solid #9ec2ff29;background:#1a2840eb;color:#eaf2ff;box-shadow:none}
   #tsBrightness.monitor-brightness svg{width:22px;height:22px}
   @keyframes tsMsgDrop{from{opacity:0;transform:translate(-50%,-14px)}to{opacity:1;transform:translate(-50%,0)}}
@@ -113,6 +119,8 @@
   html.ts-light #tsMsgCard{background:#f6f2ea;border-color:#dab984;color:#18191b;box-shadow:0 0 0 1px #dab984,0 10px 24px rgba(28,24,18,.18)}
   html.ts-light #tsMsgCard .tm-h{color:#84510a}
   html.ts-light #tsMsgCard button{background:#a26008;color:#faf8f4}
+  html.ts-light #tsVoicePill{background:rgba(246,242,234,.95);border-color:#d6cdbf;color:#18191b;box-shadow:0 8px 20px rgba(28,24,18,.16)}
+  html.ts-light #tsVoicePill i{background:#0f6d63}
   `;
   document.head.appendChild(style);
 
@@ -392,6 +400,40 @@
   const bar = document.querySelector('.top .right');
   if (bar) bar.prepend(homeBtn); else { homeBtn.classList.add('fixed'); document.body.appendChild(homeBtn); }
 
+  // Floating voice status pill when XiaoZhi is covered (sub-pages / settings / connecting)
+  const voicePill = document.createElement('button');
+  voicePill.id = 'tsVoicePill';
+  voicePill.type = 'button';
+  voicePill.setAttribute('aria-label', '展开语音对话界面');
+  voicePill.innerHTML = '<i aria-hidden="true"></i><span id="tsVoicePillTxt">小麦在听</span>';
+  document.body.appendChild(voicePill);
+  const voicePillTxt = $('tsVoicePillTxt');
+  const VOICE_PILL_LABELS = {
+    connecting: '小麦正在连接…',
+    listening: '小麦在听，请直接说 · 点此展开',
+    thinking: '小麦正在思考… · 点此展开',
+    speaking: '小麦正在回答 · 点此展开',
+  };
+  function syncVoicePill() {
+    const st = document.body.dataset.state || 'idle';
+    const covered = root.classList.contains('ts-xz-covered') || sheetOpen();
+    const lbl = covered && !document.body.classList.contains('ringing') ? (VOICE_PILL_LABELS[st] || '') : '';
+    if (lbl) {
+      if (voicePill.dataset.st !== st) voicePill.dataset.st = st;
+      if (voicePillTxt.textContent !== lbl) voicePillTxt.textContent = lbl;
+      if (!voicePill.classList.contains('show')) voicePill.classList.add('show');
+    } else if (voicePill.classList.contains('show')) {
+      voicePill.classList.remove('show');
+    }
+  }
+  voicePill.onclick = () => {
+    if (subOpen) closeSub(false);
+    closeBrightness(false);
+    forceCloseSheets();
+    autoReturn = true;
+    setView('xiaozhi');
+  };
+
   // Guard XiaoZhi's 1s clock tick from unconditionally dirtying unchanged text nodes (saves 59/60 CPU repaints/min)
   const tcDesc = Object.getOwnPropertyDescriptor(Node.prototype, 'textContent');
   if (tcDesc?.get && tcDesc?.set) {
@@ -470,6 +512,7 @@
     syncXzQuietTimer();
     const wantDisp = homeOk ? '' : 'none';
     if (homeBtn.style.display !== wantDisp) homeBtn.style.display = wantDisp;
+    syncVoicePill();
   }
   function setView(v) {
     view = v;
@@ -921,6 +964,7 @@
       prevBodyState = curState;
       if (curState === 'speaking' || curState === 'idle' || curState === 'thinking') scheduleVoiceSrvCheck();
     }
+    syncVoicePill();
     if (!isBusy()) return;
     lastBusy = Date.now();
     stopOverlayClip();
@@ -941,7 +985,7 @@
   }).observe(document.body, { attributes: true, attributeFilter: ['data-state', 'class'] });
   for (const ev of ['pointerdown', 'touchstart', 'keydown']) {
     addEventListener(ev, e => {
-      if (card && card.contains(e.target)) return;
+      if ((card && card.contains(e.target)) || voicePill.contains(e.target)) return;
       lastTouch = Date.now();
       if (view === 'xiaozhi') autoReturn = false;
     }, { capture: true, passive: true });

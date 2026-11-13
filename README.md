@@ -59,7 +59,7 @@ flowchart LR
 | --- | --- | --- |
 | [`device/home/`](device/home/) | `thinksmart-home.py` (`:8095`) | **1280×800 桌面主页**：和风天气全屏详情页（支持多城市秒切、24 小时曲线、7 日温差条、国标 6 项空气质量污染物与生活指数）、农历节气万年历、**家庭双向语音/文字留言板与定时提醒**、**助眠白噪音双层混音 + 晨间日出渐亮温柔叫醒**、番茄专注计时；深色 / 暖米浅色双主题随日出日落自动切换。 |
 | [`device/qqmusic/`](device/qqmusic/) | `thinksmart-qqmusic.py` (`:8091`) | **独立无损音乐服务**：支持扫码登录同步绿钻 VIP 与「我喜欢」歌单、SQ 无损 FLAC 经 `ffmpeg + SoXR (precision=28)` 直出 `48kHz F32LE`、逐行同步滚动歌词、巅峰榜与触屏拼音首字母软键盘；通过 `aec_bridge_sitecustomize.py` 无侵入桥接 WebRTC `aec.feed_far` 硬件回声消除与语音点歌/控播工具，放歌时仍可随时语音唤醒打断。 |
-| [`device/monitor/`](device/monitor/) | `thinksmart-monitor.py` (`:8092`) | **服务器实时状态看板与顶栏叠加层**：按需连接 Nezha WebSocket（页面关闭 90 秒后自动断开省流量）、月度账期双向流量校准、单机延迟曲线；`home_overlay.js` 提供全局顶栏快捷开关、亮度/主题面板及首页空闲 60 秒自动暂停 CSS 动画（大幅降低 Skia CPU 光栅化功耗）。 |
+| [`device/monitor/`](device/monitor/) | `thinksmart-monitor.py` (`:8092`) | **服务器实时状态看板与顶栏叠加层**：按需连接 Nezha WebSocket（页面关闭 90 秒后自动断开省流量）、月度账期双向流量校准、单机延迟曲线；`home_overlay.js` 以 `iframe` 叠加层将主页 (`:8095`)、音乐 (`:8091`)、监控 (`:8092`) 常驻覆盖在 `:8090` 上（在子页面/设置页唤醒时会弹出顶部语音胶囊条，点按可随时展开小智），并提供空闲 60 秒自动暂停 CSS 动画大幅降低功耗。 |
 | [`device/intercom/`](device/intercom/) | `thinksmart-intercom.py` (`:18091`) | **远程双向可视对讲**：点亮机身 S5KC505A 摄像头，联动物理镜头盖 (`gpio87`) 与麦克风静音键 (`gpio86`)，读取 `BMA253` 重力传感器自动扶正 `0°/90°/180°/270°` 画面，支持手机网页省流模式、现场监听、全双工视频通话与家庭留言板远程收发。 |
 | [`device/study/`](device/study/) | `thinksmart-study.py` (`:8093` / `:8094`) | **AI 学习坐姿与专注陪伴**：手动开启（带 3 小时自动关闭安全锁），每分钟 3 张跨 8 秒连拍过滤瞬间动作，经 **SHAKE256 + HMAC-SHA256 端到端加密**送交本地视觉模型判断坐姿/趴桌/走神/玩手机，连续命中后用自然克隆童声/女声温和提醒（自动避让通话/投屏并暂停恢复背景音乐）；内置响应式手机/电脑家长统计页（只存脱敏文字结果，零照片落盘）。 |
 | [`device/system/`](device/system/) | `idle-blanker.py` / `thinksmart-airplay.py` 等 | **底层电源、显示、投屏与外设守护**：环境光对数曲线平滑调光（夜间最低可至 `0%`）、息屏 `SIGSTOP` 冻结 `WebKitWebProcess` 实现息屏应用 `0%` CPU、Adreno GPU 恢复看门狗、AirPlay 镜像时期 CPU/GPU 绑核提权与 Wayland 自动重连、底部 Type-C 接口 USB Host 热插拔自动挂载。 |
@@ -83,14 +83,17 @@ thinksmart-view/
 ├── docs/
 │   └── images/               # 1280×800 实机成品界面预览图
 ├── device/
+│   ├── install.sh            # 设备端一键安装与路径修正脚本
+│   ├── diagnose-wake.sh      # 跨界面语音唤醒链路只读诊断脚本
 │   ├── home/                 # 桌面主页、多城天气详情、万年历、家庭留言板、助眠与专注计时
 │   ├── qqmusic/              # 独立 QQ 音乐 HD 无损服务、触屏界面与 WebRTC AEC 桥接钩子
 │   ├── monitor/              # Nezha 服务器看板、流量校准、显示控制与顶栏叠加层
 │   ├── intercom/             # 远程双向可视对讲、全屏通话 UI 与反向 SSH 隧道脚本模板
 │   ├── study/                # AI 学习陪伴服务与家长手机/电脑端统计面板
-│   ├── system/               # 自动感光息屏守护、AirPlay 调度器、Kiosk 增强与 USB 挂载
+│   ├── kiosk/                # 首次联网 Wi-Fi 向导、虚拟软键盘等 Kiosk 静态资源
+│   ├── system/               # 自动感光息屏守护、AirPlay 调度器、Kiosk 启动器与 DMIC 音频桥
 │   ├── xiaozhi-overrides/    # 小智 Hub Git-Blob 校验无侵入加载器与高音质补丁
-│   ├── configs/              # systemd / PipeWire Hi-Fi / WirePlumber / udev / sysctl 配置
+│   ├── configs/              # systemd / PipeWire / WirePlumber（用户态+系统态）/ udev / kiosk 配置
 │   └── tests/                # 设备端自动化单元与接口回归测试套件
 └── mac-companion/
     ├── voice-server/         # Apple Silicon MLX 本地 ASR + Qwen3-TTS 流式语音克隆与网关
@@ -103,20 +106,46 @@ thinksmart-view/
 
 ### 一、设备端部署（Lenovo ThinkSmart View · Ubuntu 24.04 ARM64）
 
-1. **创建独立 Python 运行环境**（与第三方语音客户端环境完全隔离）：
+> **前置底包要求**：本套件基于 [`justhalfbit/thinksmart-ubuntu-image`](https://github.com/justhalfbit/thinksmart-ubuntu-image)（Ubuntu 24.04 ARM64）+ [`xiaozhi-thinksmart-client`](https://github.com/justhalfbit/xiaozhi-thinksmart-client)（监听 `127.0.0.1:8090`，由后台服务常驻读取 `thinksmart_mic` 进行 `sherpa-onnx` 语音唤醒）构建。  
+> **架构铁律**：`/etc/thinksmart-kiosk.conf` 中的顶层 `URL` **必须保持 `http://127.0.0.1:8090/`（小智页面）**，绝不能改成 `:8095`。主页 (`:8095`)、QQ音乐 (`:8091`) 与服务器监控 (`:8092`) 是通过 `thinksmart-kiosk.py` 注入 `home_overlay.js` 作为全屏 `iframe` 叠加层盖在 `:8090` 上方，从而确保任意界面下底层小智始终常驻监听。
+
+#### 方式 A：一键安装（强烈推荐）
+
+在设备上克隆或解压本仓库后，直接执行自动部署脚本（自动创建虚拟环境、放置系统级/用户级配置、安装并重命名 AEC 桥接钩子、校对 `:8090` 顶层 URL 并重启相关服务）：
+
+```bash
+sudo bash device/install.sh
+```
+
+按需配置扩展环境变量与服务器清单后即可使用：
+- 编辑 `/etc/systemd/system/thinksmart-monitor.service` 设置您的 `NEZHA_HOST`，参考 [`servers.example.json`](device/monitor/servers.example.json) 与 [`traffic.example.json`](device/monitor/traffic.example.json) 更新 `/usr/local/share/thinksmart-monitor/{servers,traffic}.json`。
+- 编辑 `/etc/systemd/system/thinksmart-home.service` 设置 `WEATHER_DEFAULT_CITY`、`WEATHER_EXTRA_CITIES` 及和风天气 API Key 文件路径。
+
+#### 方式 B：手动部署路径对照（如需自行微调）
+
+1. **独立 Python 运行环境**：
    ```bash
    sudo mkdir -p /opt/thinksmart-addons
    sudo python3 -m venv /opt/thinksmart-addons/venv
    sudo /opt/thinksmart-addons/venv/bin/pip install aiohttp numpy lunar_python
    ```
-2. **安装服务程序与静态资源**：
-   - 将 `device/home/thinksmart-home.py`、`device/qqmusic/thinksmart-qqmusic.py`、`device/monitor/{thinksmart-monitor.py,thinksmart_display.py}`、`device/intercom/{thinksmart-intercom.py,thinksmart-intercom-ui.py,thinksmart-intercom-tunnel.sh}`、`device/study/thinksmart-study.py` 及 `device/system/*` 复制至 `/usr/local/bin/`（`thinksmart-review`、`thinksmart-set-search-keys` 放入 `/usr/local/sbin/`）。
-   - 将各模块的 `index.html`、`display.html`、`parent.html`、`*.js`、`apps.json` 复制至 `/usr/local/share/thinksmart-{home,qqmusic,monitor,intercom,study}/`。
-   - 根据 [`servers.example.json`](device/monitor/servers.example.json) 与 [`traffic.example.json`](device/monitor/traffic.example.json) 创建 `/usr/local/share/thinksmart-monitor/servers.json` 与 `traffic.json`。
-3. **配置环境变量与服务单元**：
-   - 将 `device/configs/` 下的 `systemd`、`pipewire`、`wireplumber`、`sysctl`、`udev` 配置复制到对应系统目录。
-   - 在 `thinksmart-monitor.service` 中设置您的 `NEZHA_HOST`，在 `thinksmart-home.service` 中按需设置 `WEATHER_DEFAULT_CITY` 与 `WEATHER_EXTRA_CITIES`。
-   - 执行 `sudo systemctl daemon-reload` 并启用所需服务。
+2. **服务程序、Kiosk 启动器与 AEC 桥接**：
+   - 将各模块的 `*.py`、`*.sh` 与 `device/system/*`（除 `thinksmart-review`、`thinksmart-set-search-keys` 放 `/usr/local/sbin/`）复制至 `/usr/local/bin/`。
+   - **关键（勿遗漏）**：将 [`device/qqmusic/aec_bridge_sitecustomize.py`](device/qqmusic/aec_bridge_sitecustomize.py) **重命名**复制为 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py`，并部署 `device/configs/systemd/system/thinksmart-client.service.d/aec-bridge.conf`。
+   - 将各前端资源与 [`device/kiosk/*`](device/kiosk/) 复制至 `/usr/local/share/thinksmart-{home,qqmusic,monitor,intercom,study,kiosk}/`。
+3. **系统级与用户级配置（严格区分存放路径）**：
+   - 系统级：`device/configs/systemd/system/*` → `/etc/systemd/system/`；`udev/*` → `/etc/udev/rules.d/`；`sysctl/*` → `/etc/sysctl.d/`；`wireplumber-system/*` → `/etc/wireplumber/`；参考 `device/configs/kiosk/thinksmart-kiosk.conf.example` 配置 `/etc/thinksmart-kiosk.conf`（保持 `URL="http://127.0.0.1:8090/"`）。
+   - 用户级：`device/configs/pipewire/*` → `/home/ubuntu/.config/pipewire/`；`device/configs/wireplumber/*` → `/home/ubuntu/.config/wireplumber/`；`device/configs/systemd/user/*.service` 及 `xiaozhi-hub.service.d/thinksmart-overrides.conf` → `/home/ubuntu/.config/systemd/user/`（`proxy.conf.example` 仅作代理参考模板，按需启用）。
+
+---
+
+### 常见问题：为什么切到主页/其他界面无法唤醒小智？
+
+可先在设备上运行只读排查脚本 **`bash device/diagnose-wake.sh`**，重点检查以下四项：
+1. **顶层 URL 被改成了 `:8095`**：如果把 `/etc/thinksmart-kiosk.conf` 的 `URL` 改成了 `http://127.0.0.1:8095/`，顶层会直接退出 `home_overlay.js`，唤醒后画面切不回小智。需改回 `sudo kiosk-mode url http://127.0.0.1:8090/ && sudo kiosk-mode restart`。
+2. **使用了纯网页版小智而非后台语音客户端**：若系统运行的不是后台常驻麦克风监听的 `xiaozhi-thinksmart-client`（`thinksmart-client.service`），而是依赖浏览器标签页录音的网页客户端，页面一旦跳转就会失去麦克风。
+3. **漏部署或未重命名 `sitecustomize.py`**：未把 `aec_bridge_sitecustomize.py` 放到 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py` 时，播放音乐/助眠声景会绕过 WebRTC 回声消除直接外放，导致声音盖过人声唤醒词。
+4. **未更新 `/usr/local/bin/thinksmart-kiosk.py` 或用户态 WirePlumber 放错目录**：旧版 `thinksmart-kiosk.py` 不会加载 `home_overlay.js` / `kiosk_overlay.js`；而 `device/configs/{pipewire,wireplumber,systemd/user}` 必须放在 `/home/ubuntu/.config/` 下，确保 `thinksmart-mic.service` 与不休眠 DSP 规则正常工作。
 
 ### 二、Mac 算力端部署（Apple Silicon）
 
