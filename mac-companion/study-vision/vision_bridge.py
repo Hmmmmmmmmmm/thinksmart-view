@@ -23,6 +23,9 @@ import hmac
 import json
 import os
 import contextlib
+import shutil
+import threading
+import time
 import subprocess
 import tempfile
 import threading
@@ -39,7 +42,38 @@ MAX_IMAGES = 4          # a check sends a short burst of frames (3, 4 s apart) i
 MAX_AGE = 120
 
 CACHE = Path(os.path.expanduser("~/Library/Caches/study-vision"))
+LOG_DIR = Path(os.path.expanduser("~/Library/Logs/study-vision"))
+LOG_FILES = ("bridge.out.log", "bridge.err.log", "llm.out.log", "llm.err.log")
+LOG_MAX_BYTES = 10 * 1024 * 1024
+LOG_ROTATE_INTERVAL = 300.0
+_log_rotate_lock = threading.Lock()
+_last_log_rotate = 0.0
 _seen = {}
+
+
+def _rotate_logs_if_needed(force: bool = False) -> None:
+    """Copy-and-truncate study-vision LaunchAgent logs exceeding 10 MB without breaking open FDs."""
+    global _last_log_rotate
+    now = time.monotonic()
+    if not force and (now - _last_log_rotate) < LOG_ROTATE_INTERVAL:
+        return
+    if not _log_rotate_lock.acquire(blocking=force):
+        return
+    try:
+        now = time.monotonic()
+        if not force and (now - _last_log_rotate) < LOG_ROTATE_INTERVAL:
+            return
+        _last_log_rotate = now
+        for name in LOG_FILES:
+            p = LOG_DIR / name
+            try:
+                if p.exists() and p.stat().st_size > LOG_MAX_BYTES:
+                    shutil.copy2(p, LOG_DIR / f"{name}.1")
+                    os.truncate(p, 0)
+            except OSError:
+                pass
+    finally:
+        _log_rotate_lock.release()
 _seen_lock = threading.Lock()
 _model_lock = threading.Lock()  # llama-server has one slot; queue requests here
 MAX_IMAGE_BYTES = 2 * 1024 * 1024
@@ -163,6 +197,7 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(raw)
 
     def do_GET(self):
+        _rotate_logs_if_needed()
         if self.path != "/study/health":
             return self._send(404, {"error": "not found"})
         try:
@@ -173,6 +208,7 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, {"ok": True, "model_ready": ok})
 
     def do_POST(self):
+        _rotate_logs_if_needed()
         if self.path != "/study/v1":
             return self._send(404, {"error": "not found"})
         try:
@@ -210,4 +246,5 @@ class Handler(BaseHTTPRequestHandler):
 
 
 if __name__ == "__main__":
+    _rotate_logs_if_needed(force=True)
     ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()

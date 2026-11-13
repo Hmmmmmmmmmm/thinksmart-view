@@ -9,6 +9,7 @@ ExecStart=/opt/thinksmart-addons/venv/bin/python /usr/local/bin/thinksmart-inter
 Restart=always
 RestartSec=2
 Environment=PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

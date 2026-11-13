@@ -8,10 +8,16 @@ User=ubuntu
 Environment=HOME=/home/ubuntu XDG_RUNTIME_DIR=/run/user/1000 PULSE_SERVER=unix:/run/user/1000/pulse/native PYTHONUNBUFFERED=1 PYTHONDONTWRITEBYTECODE=1
 NoNewPrivileges=yes
 PrivateDevices=yes
+PrivateTmp=yes
+ProtectSystem=full
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6 AF_NETLINK
 ExecStartPre=/bin/sh -c 'for i in $(seq 1 20); do [ -S /run/user/1000/pulse/native ] && exit 0; sleep 0.5; done; exit 0'
 ExecStart=/opt/thinksmart-addons/venv/bin/python /usr/local/bin/thinksmart-qqmusic.py
 Restart=always
 RestartSec=3
+TimeoutStopSec=10
 
 [Install]
 WantedBy=multi-user.target

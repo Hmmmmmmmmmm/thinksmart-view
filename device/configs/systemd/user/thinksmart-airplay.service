@@ -9,6 +9,7 @@ Environment=PYTHONDONTWRITEBYTECODE=1
 ExecStart=/usr/bin/python3 -u /usr/local/bin/thinksmart-airplay.py
 Restart=always
 RestartSec=3
+TimeoutStopSec=10
 
 [Install]
 WantedBy=default.target

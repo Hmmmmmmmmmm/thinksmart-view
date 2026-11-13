@@ -590,7 +590,7 @@ def main() -> int:
     env["WAYLAND_DISPLAY"] = "wayland-1"
     env["PULSE_SERVER"] = f"unix:{RUNTIME_DIR}/pulse/native"
     env["DBUS_SESSION_BUS_ADDRESS"] = f"unix:path={RUNTIME_DIR}/bus"
-    env.setdefault("GST_DEBUG", "*:2")
+    env.setdefault("GST_DEBUG", "*:2,vadisplay:0")
     if Path(AUTOROTATE_SO).exists():
         env["LD_PRELOAD"] = AUTOROTATE_SO
 

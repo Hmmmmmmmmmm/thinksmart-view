@@ -922,6 +922,304 @@ html[data-theme="light"] .tp-run[data-kind="done"] #trStop { color: #faf8f4; }
 .switch::before { content: ""; position: absolute; left: -6px; right: -6px; top: -8px; bottom: -8px; }
 .cal-arw { width: 48px; height: 44px; margin: -2px 0; }
 html[data-theme="light"] .mlist .msg.unread .m-time { color: var(--ms-ink); }
+
+/* ===== 倒数日 / 纪念日 / 生日 (#calCdPill, .cd.has-cd, #side st-cd, #cpage, .cd-edit) =====
+   2026-11-13 R2: native 400/700 weights only, integer px font-sizes & even line-heights,
+   integer modal coordinates (88, 56, 1104x688), 2x2 showcase empty state, progress bar, & touch grid picker. */
+.cal-head { gap: 6px; padding: 0 2px 0 6px; }
+.cal-arw { width: 46px; height: 44px; margin: -2px 0; }
+.cal-cd-pill { height: 42px; margin: -1px 0; max-width: 154px; padding: 0 13px; border-radius: 999px; background: var(--ctl); border: 2px solid var(--ctl); color: var(--t1); font-size: 18px; line-height: 24px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; flex: none; white-space: nowrap; overflow: hidden; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cal-cd-pill:active { transform: scale(.95); transition-duration: .05s; }
+.cal-cd-pill svg { width: 18px; height: 18px; stroke-width: 2.2; flex: none; color: var(--fo); }
+.cal-cd-pill.has-top { padding: 0 11px; font-size: 17px; line-height: 22px; gap: 5px; }
+.cal-cd-pill.has-top.short { font-size: 18px; line-height: 24px; padding: 0 12px; }
+.cal-cd-pill .ccp-t { overflow: hidden; text-overflow: ellipsis; min-width: 0; color: var(--t1); font-weight: 700; }
+.cal-cd-pill em { font-style: normal; color: var(--fo); font-weight: 700; flex: none; }
+.cal-cd-pill.is-today { background: var(--fo-soft); border-color: var(--fo); color: var(--fo-ink); }
+.cal-cd-pill.is-today svg, .cal-cd-pill.is-today .ccp-t, .cal-cd-pill.is-today em { color: var(--fo-ink); }
+.cal-cd-pill.empty { font-size: 19px; line-height: 26px; }
+.cal-cd-pill.empty .ccp-t { color: var(--t1); font-weight: 700; }
+.cd { cursor: pointer; transition: background-color .12s ease; }
+.cd:active { background: var(--ctl); }
+.cd.has-cd { box-shadow: inset 0 0 0 2px var(--fo); background: var(--fo-soft); }
+.cd.has-cd small { font-size: 14px; line-height: 18px; color: var(--fo-ink); font-weight: 700; letter-spacing: -.5px; max-width: 54px; overflow: hidden; }
+.cd.has-cd.cd-birthday { box-shadow: inset 0 0 0 2px var(--wkend); background: var(--fest-soft); }
+.cd.has-cd.cd-birthday small { color: var(--fest-ink); }
+.cd.has-cd.cd-exam { box-shadow: inset 0 0 0 2px var(--sv); background: var(--sv-soft); }
+.cd.has-cd.cd-exam small { color: var(--sv-ink); }
+.cd.has-cd.cd-life { box-shadow: inset 0 0 0 2px var(--mu); background: var(--mu-soft); }
+.cd.has-cd.cd-life small { color: var(--mu-ink); }
+.cd.today.has-cd { background: var(--today); box-shadow: inset 0 0 0 2px #fff; }
+.cd .cd-dot { position: absolute; top: 5px; left: 6px; width: 6px; height: 6px; border-radius: 50%; background: var(--fo); display: block; text-decoration: none; }
+.cd .cd-dot.multi { width: 12px; border-radius: 999px; }
+.cd.cd-birthday .cd-dot { background: var(--wkend); }
+.cd.cd-exam .cd-dot { background: var(--sv); }
+.cd.cd-life .cd-dot { background: var(--mu); }
+.cd.today .cd-dot { background: #fff; }
+
+/* #side idle countdown spotlight */
+.side.st-cd .s-head { height: 34px; }
+.side.st-cd .s-head > svg { color: var(--fo); }
+.s-cd-box { flex: 1; min-height: 0; margin: 4px 0 8px; padding: 10px 14px; border-radius: 18px; border: 2px solid transparent; background: var(--inset); display: flex; align-items: center; justify-content: space-between; gap: 12px; cursor: pointer; contain: layout paint; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.s-cd-box.is-today { border-color: var(--fo); background: var(--fo-soft); }
+.s-cd-box:active { transform: scale(.985); transition-duration: .05s; }
+.s-cd-l { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; gap: 2px; }
+.s-cd-l b { font-size: 23px; line-height: 30px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--t1); }
+.s-cd-l small { font-size: 16px; line-height: 22px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.s-cd-r { flex: none; display: flex; align-items: baseline; gap: 4px; padding: 6px 12px; border-radius: 14px; background: var(--card); }
+.s-cd-r span { font-size: 16px; line-height: 22px; color: var(--t2); font-weight: 700; }
+.s-cd-r em { font-style: normal; font-size: 36px; line-height: 38px; font-weight: 700; color: var(--fo); letter-spacing: -1px; }
+.s-cd-r.cat-birthday em { color: var(--wkend); }
+.s-cd-r.cat-exam em { color: var(--sv); }
+.s-cd-r.cat-life em { color: var(--mu); }
+.s-cd-r.is-today { background: var(--fo); }
+.s-cd-r.is-today em { font-size: 24px; line-height: 30px; color: #fff; letter-spacing: 0; }
+
+/* #cpage full-screen 1280x800 */
+.cpage { position: fixed; inset: 0; z-index: 59; background: var(--bg); padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 14px; opacity: 0; visibility: hidden; pointer-events: none; contain: strict; transition: opacity .14s ease, visibility 0s linear .14s; }
+.cpage:focus, .cpage:focus-visible { outline: none; }
+.cpage.show { opacity: 1; visibility: visible; pointer-events: auto; transition: opacity .16s ease, visibility 0s linear 0s; }
+body.paused .cpage { transition: none !important; }
+.cp-head { height: 58px; flex: none; display: flex; align-items: center; gap: 12px; }
+.cp-tabs { height: 56px; padding: 4px; border-radius: 18px; background: var(--card); display: inline-flex; align-items: center; gap: 4px; flex: none; }
+.cp-tab { height: 48px; padding: 0 15px; border-radius: 14px; border: 2px solid transparent; background: transparent; color: var(--t2); font-size: 19px; line-height: 24px; font-weight: 700; display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-tab:active { transform: scale(.96); transition-duration: .05s; }
+.cp-tab em { font-style: normal; font-size: 16px; line-height: 22px; color: var(--t2); font-weight: 700; }
+.cp-tab.on { background: var(--ctl); border-color: var(--fo); color: var(--t1); }
+.cp-tab.on em { color: var(--fo); }
+.cp-head-r { margin-left: auto; display: flex; align-items: center; gap: 12px; flex: none; }
+.cp-clean { height: 52px; padding: 0 16px; border-radius: 16px; border: 2px solid var(--line2); background: var(--card); color: var(--t2); font-size: 18px; line-height: 24px; font-weight: 700; white-space: nowrap; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-clean:active { transform: scale(.96); transition-duration: .05s; }
+.cp-clean.sure { background: var(--bad); border-color: var(--bad); color: #fff; }
+.cp-add { height: 56px; padding: 0 22px; border-radius: 18px; background: var(--fo); color: var(--bg); font-size: 20px; line-height: 26px; font-weight: 700; display: inline-flex; align-items: center; gap: 8px; white-space: nowrap; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-add:active { transform: scale(.96); transition-duration: .05s; }
+.cp-add svg { width: 22px; height: 22px; stroke-width: 2.4; }
+.cp-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 472px 1fr; gap: 14px; }
+.cp-body.empty { display: flex; }
+.cp-empty { flex: 1; background: var(--card); border-radius: 28px; padding: 28px 32px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 24px; }
+.cp-empty-hd { text-align: center; display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.cp-empty-hd h4 { font-size: 32px; line-height: 42px; font-weight: 700; color: var(--t1); }
+.cp-empty-hd p { font-size: 20px; line-height: 30px; font-weight: 400; color: var(--t2); }
+.cp-tpl-grid { width: 100%; max-width: 1160px; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
+.cp-tpl { height: 140px; padding: 18px 22px; border-radius: 22px; border: 2px solid var(--inset); background: var(--inset); display: flex; align-items: center; gap: 18px; text-align: left; contain: layout paint; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-tpl:active { transform: scale(.98); transition-duration: .05s; }
+.cp-tpl-ico { width: 64px; height: 64px; border-radius: 18px; display: flex; align-items: center; justify-content: center; flex: none; background: var(--fo-soft); color: var(--fo-ink); }
+.cp-tpl-ico svg { width: 32px; height: 32px; stroke-width: 2; }
+.cp-tpl[data-tpl="exam"] .cp-tpl-ico { background: var(--sv-soft); color: var(--sv-ink); }
+.cp-tpl[data-tpl="lunar_bday"] .cp-tpl-ico { background: var(--fest-soft); color: var(--fest-ink); }
+.cp-tpl[data-tpl="solar_anniv"] .cp-tpl-ico { background: var(--fo-soft); color: var(--fo-ink); }
+.cp-tpl[data-tpl="countup"] .cp-tpl-ico { background: var(--mu-soft); color: var(--mu-ink); }
+.cp-tpl-tx { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; }
+.cp-tpl-tx b { font-size: 23px; line-height: 30px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-tpl-tx span { font-size: 17px; line-height: 24px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-tpl-go { font-style: normal; height: 44px; padding: 0 16px; border-radius: 14px; background: var(--card); color: var(--t1); font-size: 18px; line-height: 24px; font-weight: 700; display: inline-flex; align-items: center; flex: none; }
+.cp-hero { background: var(--card); border-radius: 28px; border: 2px solid transparent; padding: 22px 26px; display: flex; flex-direction: column; justify-content: space-between; min-height: 0; contain: layout paint; }
+.cp-hero.is-today { border-color: var(--fo); }
+.cp-h-top { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.cp-pill { height: 36px; padding: 0 14px; border-radius: 999px; font-size: 17px; line-height: 22px; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; background: var(--fo-soft); color: var(--fo-ink); }
+.cp-pill.cat-birthday { background: var(--fest-soft); color: var(--fest-ink); }
+.cp-pill.cat-exam { background: var(--sv-soft); color: var(--sv-ink); }
+.cp-pill.cat-life { background: var(--mu-soft); color: var(--mu-ink); }
+.cp-pill.pin { background: var(--ms-soft); color: var(--ms-ink); }
+.cp-pill.anniv { background: var(--ctl); color: var(--t1); }
+.cp-h-title { font-size: 34px; line-height: 44px; font-weight: 700; color: var(--t1); margin-top: 10px; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; word-break: break-all; }
+.cp-h-mid { display: flex; flex-direction: column; gap: 10px; margin: 4px 0; }
+.cp-h-num { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.cp-h-num span { font-size: 24px; line-height: 32px; color: var(--t2); font-weight: 700; }
+.cp-h-num b { font-size: 92px; line-height: 96px; font-weight: 700; letter-spacing: -2px; color: var(--fo); }
+.cp-hero[data-cat="birthday"] .cp-h-num b { color: var(--wkend); }
+.cp-hero[data-cat="exam"] .cp-h-num b { color: var(--sv); }
+.cp-hero[data-cat="life"] .cp-h-num b { color: var(--mu); }
+.cp-hero.past .cp-h-num b { color: var(--t2); font-size: 74px; line-height: 80px; }
+.cp-prog { display: flex; flex-direction: column; gap: 6px; }
+.cp-prog-top { display: flex; align-items: center; justify-content: space-between; font-size: 16px; line-height: 22px; color: var(--t2); font-weight: 700; }
+.cp-prog-bar { height: 10px; border-radius: 999px; background: var(--ctl); overflow: hidden; }
+.cp-prog-fill { height: 100%; border-radius: 999px; background: var(--fo); }
+.cp-hero[data-cat="birthday"] .cp-prog-fill { background: var(--wkend); }
+.cp-hero[data-cat="exam"] .cp-prog-fill { background: var(--sv); }
+.cp-hero[data-cat="life"] .cp-prog-fill { background: var(--mu); }
+.cp-hero.past .cp-prog-fill { background: var(--line2); }
+.cp-h-meta { background: var(--inset); border-radius: 18px; padding: 12px 18px; display: flex; flex-direction: column; gap: 6px; font-size: 19px; line-height: 26px; color: var(--t2); }
+.cp-h-meta div { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.cp-h-meta strong { color: var(--t1); font-weight: 700; }
+.cp-h-acts { display: grid; grid-template-columns: 1.2fr 1fr 1fr; gap: 10px; margin-top: 12px; }
+.cp-act { height: 56px; border-radius: 16px; border: 2px solid transparent; background: var(--ctl); color: var(--t1); font-size: 19px; line-height: 24px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; gap: 6px; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-act:active { transform: scale(.96); transition-duration: .05s; }
+.cp-act svg { width: 20px; height: 20px; }
+.cp-act.on { background: var(--ms-soft); border-color: var(--ms); color: var(--ms-ink); }
+.cp-act.del { background: transparent; border-color: var(--bad-line); color: var(--bad-ink); }
+.cp-act.del.sure { background: var(--bad); border-color: var(--bad); color: #fff; }
+.cp-list-wrap { background: var(--card); border-radius: 28px; padding: 18px; display: flex; flex-direction: column; min-height: 0; contain: layout paint; }
+.cp-list { flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; touch-action: pan-y; scrollbar-width: none; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 14px; padding: 0; }
+.cp-list::-webkit-scrollbar { display: none; }
+.cp-item { height: 124px; border-radius: 20px; border: 2px solid var(--inset); background: var(--inset); padding: 14px 18px; display: flex; align-items: center; justify-content: space-between; gap: 12px; text-align: left; contain: layout paint; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cp-item:active { transform: scale(.98); transition-duration: .05s; }
+.cp-item.is-today { border-color: var(--fo); background: var(--fo-soft); }
+.cp-item.sel { border-color: var(--fo); background: var(--ctl); }
+.cp-i-l { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cp-i-top { display: flex; align-items: center; gap: 6px; font-size: 16px; line-height: 22px; color: var(--t2); font-weight: 700; white-space: nowrap; overflow: hidden; }
+.cp-i-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--fo); flex: none; }
+.cp-item[data-cat="birthday"] .cp-i-dot { background: var(--wkend); }
+.cp-item[data-cat="exam"] .cp-i-dot { background: var(--sv); }
+.cp-item[data-cat="life"] .cp-i-dot { background: var(--mu); }
+.cp-i-pin { color: var(--ms-ink); background: var(--ms-soft); padding: 0 8px; border-radius: 6px; font-size: 14px; line-height: 20px; font-weight: 700; flex: none; }
+.cp-i-title { font-size: 22px; line-height: 30px; font-weight: 700; color: var(--t1); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-i-sub { font-size: 16px; line-height: 22px; color: var(--t2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-i-r { flex: none; text-align: right; display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 2px; }
+.cp-i-r b { font-size: 36px; line-height: 40px; font-weight: 700; color: var(--fo); letter-spacing: -1px; }
+.cp-item[data-cat="birthday"] .cp-i-r b { color: var(--wkend); }
+.cp-item[data-cat="exam"] .cp-i-r b { color: var(--sv); }
+.cp-item[data-cat="life"] .cp-i-r b { color: var(--mu); }
+.cp-item.past .cp-i-title { color: var(--t2); }
+.cp-item.past .cp-i-r b { color: var(--t3); font-size: 28px; line-height: 32px; }
+.cp-i-r small { font-size: 16px; line-height: 22px; color: var(--t2); font-weight: 700; }
+
+/* Touch Create / Edit Modal (.modal.cd-edit): exact integer coords (88, 56, 1104x688) on 1280x800 */
+.modal.cd-edit, .modal.cd-edit.show { left: 88px; top: 56px; width: 1104px; height: 688px; max-width: none; max-height: none; transform: none; backface-visibility: visible; padding: 20px 28px; gap: 14px; justify-content: flex-start; }
+.modal.cd-edit h3 { height: 52px; font-size: 28px; line-height: 36px; flex: none; }
+.modal.cd-edit h3 > button { width: 52px; height: 52px; font-size: 28px; }
+.cde-row { display: flex; align-items: center; gap: 12px; height: 54px; flex: none; }
+.cde-inp { flex: 1; height: 54px; padding: 0 18px; border-radius: 16px; border: 2px solid var(--line2); background: var(--inset); color: var(--t1); font-family: inherit; font-size: 22px; line-height: 30px; font-weight: 700; outline: none; -webkit-user-select: text; user-select: text; }
+.cde-inp::placeholder { color: var(--t3); font-weight: 400; }
+.cde-inp:focus { border-color: var(--fo); }
+.cde-clr { height: 54px; padding: 0 22px; border-radius: 16px; background: var(--ctl); color: var(--t2); font-size: 19px; line-height: 26px; font-weight: 700; flex: none; }
+.cde-qbox { height: 112px; padding: 10px 14px; border-radius: 18px; background: var(--inset); display: flex; flex-direction: column; justify-content: space-between; gap: 8px; flex: none; }
+.cde-qline { height: 42px; display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.cde-qline::-webkit-scrollbar { display: none; }
+.cde-qline > span { font-size: 17px; line-height: 24px; color: var(--t2); font-weight: 700; width: 46px; flex: none; }
+.cde-q { height: 42px; padding: 0 13px; border-radius: 12px; background: var(--ctl); color: var(--t1); font-size: 18px; line-height: 24px; font-weight: 700; flex: none; white-space: nowrap; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cde-q:active { transform: scale(.95); transition-duration: .05s; }
+.cde-bar { height: 52px; display: flex; align-items: center; justify-content: space-between; gap: 12px; flex: none; }
+.cde-seg { height: 52px; padding: 4px; border-radius: 16px; background: var(--inset); display: inline-flex; align-items: center; gap: 4px; }
+.cde-seg button { height: 44px; padding: 0 18px; border-radius: 12px; border: 2px solid transparent; background: transparent; color: var(--t2); font-size: 19px; line-height: 26px; font-weight: 700; white-space: nowrap; }
+.cde-seg button.on { background: var(--ctl); border-color: var(--fo); color: var(--t1); }
+.cde-pick-wrap { height: 120px; flex: none; position: relative; }
+.cde-pick { height: 120px; display: grid; grid-template-columns: 1.25fr 1fr 1fr; gap: 12px; }
+.cde-col { height: 120px; background: var(--inset); border-radius: 18px; padding: 10px 14px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.cde-step { width: 56px; height: 56px; border-radius: 16px; background: var(--ctl); color: var(--t1); font-size: 28px; line-height: 28px; font-weight: 700; display: inline-flex; align-items: center; justify-content: center; flex: none; touch-action: none; transition: transform .12s cubic-bezier(.22,1,.36,1); }
+.cde-step:active { transform: scale(.93); transition-duration: .05s; }
+.cde-step:disabled { opacity: .32; pointer-events: none; }
+.cde-val { flex: 1; text-align: center; min-width: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; cursor: pointer; border-radius: 12px; padding: 2px 4px; }
+.cde-val:active { background: var(--ctl); }
+.cde-val b { display: block; font-size: 26px; line-height: 32px; font-weight: 700; color: var(--t1); white-space: nowrap; }
+.cde-val small { display: block; font-size: 16px; line-height: 22px; color: var(--t2); margin-top: 2px; white-space: nowrap; }
+.cde-subbtn { margin-top: 4px; height: 28px; padding: 0 12px; border-radius: 999px; background: var(--ctl); color: var(--t2); font-size: 15px; line-height: 20px; font-weight: 700; }
+.cde-subbtn.on { background: var(--fo-soft); color: var(--fo-ink); }
+.cde-grid-pane { height: 120px; background: var(--inset); border-radius: 18px; padding: 10px 14px; display: none; align-items: center; gap: 12px; }
+.cde-grid { flex: 1; min-width: 0; height: 100px; overflow-y: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none; display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; align-content: center; }
+.cde-grid::-webkit-scrollbar { display: none; }
+.cde-grid.days { grid-template-columns: repeat(11, minmax(0, 1fr)); gap: 6px; align-content: center; }
+.cde-gbtn { height: 44px; border-radius: 12px; border: 2px solid transparent; background: var(--ctl); color: var(--t1); font-size: 18px; line-height: 24px; font-weight: 700; white-space: nowrap; }
+.cde-grid.days .cde-gbtn { height: 28px; border-radius: 8px; font-size: 16px; line-height: 22px; padding: 0; }
+.cde-gbtn.on { background: var(--fo-soft); border-color: var(--fo); color: var(--fo-ink); }
+.cde-gback { width: 84px; height: 96px; border-radius: 14px; background: var(--ctl); color: var(--t2); font-size: 18px; line-height: 24px; font-weight: 700; flex: none; }
+.cde-prev { height: 52px; padding: 0 16px; border-radius: 14px; background: var(--inset); display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 18px; line-height: 24px; color: var(--t2); flex: none; }
+.cde-prev-l { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cde-prev strong { color: var(--t1); font-weight: 700; }
+.cde-prev-r { display: flex; align-items: center; gap: 8px; flex: none; }
+.cde-rel { height: 34px; padding: 0 11px; border-radius: 10px; background: var(--ctl); color: var(--t2); font-size: 16px; line-height: 22px; font-weight: 700; white-space: nowrap; }
+.cde-rel:active { transform: scale(.95); }
+.cde-prev b { font-size: 20px; line-height: 26px; color: var(--fo); font-weight: 700; margin-left: 4px; white-space: nowrap; }
+.cde-foot { height: 48px; display: flex; align-items: center; justify-content: space-between; gap: 14px; flex: none; }
+.cde-cats { display: flex; align-items: center; gap: 10px; }
+.cde-cat { height: 48px; padding: 0 18px; border-radius: 14px; border: 2px solid transparent; background: var(--ctl); color: var(--t2); font-size: 18px; line-height: 24px; font-weight: 700; }
+.cde-cat.on { background: var(--fo-soft); border-color: var(--fo); color: var(--fo-ink); }
+.cde-pin-wrap { display: inline-flex; align-items: center; gap: 12px; font-size: 19px; line-height: 26px; font-weight: 700; color: var(--t1); cursor: pointer; margin-left: auto; }
+.modal.cd-edit .m-actions { margin-top: 0; height: 58px; flex: none; }
+.modal.cd-edit .m-actions .btn { height: 58px; font-size: 20px; line-height: 26px; border-radius: 18px; }
+
+html[data-theme="light"] .cpage { background: var(--bg); }
+html[data-theme="light"] .cal-cd-pill:not(.is-today) { border-color: var(--line); }
+html[data-theme="light"] .cp-hero:not(.is-today), html[data-theme="light"] .cp-list-wrap, html[data-theme="light"] .cp-tabs, html[data-theme="light"] .cp-empty { box-shadow: 0 0 0 1px var(--line); }
+html[data-theme="light"] .cp-item:not(.sel):not(.is-today), html[data-theme="light"] .cp-tpl { border-color: var(--line); }
+html[data-theme="light"] .cp-tpl-go, html[data-theme="light"] .cp-h-meta, html[data-theme="light"] .s-cd-box:not(.is-today), html[data-theme="light"] .cde-qbox, html[data-theme="light"] .cde-col, html[data-theme="light"] .cde-grid-pane, html[data-theme="light"] .cde-prev, html[data-theme="light"] .cde-seg { box-shadow: inset 0 0 0 1px var(--line); }
+html[data-theme="light"] .cp-add, html[data-theme="light"] .s-cd-r.is-today em { color: #faf8f4; }
+
+/* ----- 倒数日 polish (Claude, 2026-11-13 evening; typography & layout polish). Native 400/700 weights and whole pixels only. ----- */
+/* home: the month title never wraps; the pill takes what is left */
+.cal-head b { white-space: nowrap; flex: none; }
+.cal-cd-pill { flex: 0 1 auto; min-width: 0; max-width: none; height: 40px; margin: 0; }
+.cal-cd-pill.has-top:not(.short) { font-size: 16px; line-height: 22px; padding: 0 10px; gap: 4px; }
+/* a marked day: the ring and the tint say it; the name fits the cell */
+.cd.has-cd small { font-size: 13px; line-height: 16px; letter-spacing: -.5px; max-width: 100%; }
+.cd .cd-dot:not(.multi) { display: none; }
+.cd .cd-dot.multi { top: 4px; left: 5px; }
+.s-cd-box { padding: 10px 12px 10px 16px; }
+/* chosen tab / segment = the app's chosen chip (tint + ring + ink) */
+.cp-tab.on, .cde-seg button.on { background: var(--fo-soft); border-color: var(--fo); color: var(--fo-ink); }
+.cp-tab.on em { color: var(--fo-ink); }
+.cp-clean { height: 56px; padding: 0 18px; border: none; border-radius: 18px; align-items: center; justify-content: center; }
+/* the big card */
+.cp-hero { padding: 24px 26px 22px; }
+.cp-hero.is-today[data-cat="birthday"] { border-color: var(--wkend); }
+.cp-hero.is-today[data-cat="exam"] { border-color: var(--sv); }
+.cp-hero.is-today[data-cat="life"] { border-color: var(--mu); }
+.cp-h-title { font-size: 36px; line-height: 46px; margin-top: 12px; }
+.cp-h-mid { gap: 16px; }
+.cp-h-num { flex-wrap: nowrap; gap: 12px; }
+.cp-h-num span { font-size: 26px; line-height: 34px; }
+.cp-h-num b { font-size: 112px; line-height: 112px; letter-spacing: -3px; }
+.cp-h-num b.txt { font-size: 64px; line-height: 84px; letter-spacing: 0; }
+.cp-hero.past .cp-h-num b { font-size: 84px; line-height: 92px; }
+.cp-prog { gap: 10px; }
+.cp-prog-top { font-size: 18px; line-height: 24px; font-weight: 400; }
+.cp-h-meta { padding: 14px 18px; gap: 8px; }
+.cp-h-meta span { flex: none; }
+.cp-h-meta strong { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cp-act.del { background: var(--ctl); border-color: transparent; }
+/* the list: ten full cards a screen; the chosen card wears its own colour, today is a tint */
+.cp-list { gap: 12px; }
+.cp-item { height: 116px; padding: 12px 16px 12px 18px; border-color: transparent; }
+.cp-item.sel { background: var(--ctl); border-color: var(--fo); }
+.cp-item.sel[data-cat="birthday"] { border-color: var(--wkend); }
+.cp-item.sel[data-cat="exam"] { border-color: var(--sv); }
+.cp-item.sel[data-cat="life"] { border-color: var(--mu); }
+.cp-item.is-today { background: var(--fo-soft); }
+.cp-item.is-today:not(.sel) { border-color: transparent; }
+.cp-item.is-today[data-cat="birthday"] { background: var(--fest-soft); }
+.cp-item.is-today[data-cat="exam"] { background: var(--sv-soft); }
+.cp-item.is-today[data-cat="life"] { background: var(--mu-soft); }
+.cp-i-l { gap: 3px; }
+.cp-i-top { font-weight: 400; }
+.cp-i-top em { font-style: normal; font-weight: 700; color: var(--t1); }
+.cp-i-r { gap: 0; }
+.cp-i-r small { font-size: 15px; line-height: 20px; font-weight: 400; }
+.cp-i-r b { font-size: 38px; line-height: 42px; white-space: nowrap; }
+.cp-i-r b i { font-style: normal; font-size: 17px; letter-spacing: 0; margin-left: 3px; color: var(--t2); }
+.cp-i-r b.txt { font-size: 28px; letter-spacing: 0; }
+.cp-item.past .cp-i-r b { font-size: 30px; line-height: 42px; }
+.cp-list-empty { grid-column: 1 / -1; margin: auto; padding: 60px 0; color: var(--t2); font-size: 20px; line-height: 30px; text-align: center; }
+/* the editor: a value you can tap looks like a field; small buttons get a finger-sized area */
+.cde-col { padding: 10px 12px; gap: 10px; }
+.cde-val { height: 100px; padding: 0 4px; background: var(--card); border-radius: 14px; }
+.cde-val b { display: inline-flex; align-items: center; gap: 7px; font-size: 28px; line-height: 34px; }
+.cde-val b::after { content: ""; flex: none; margin-top: 3px; border-style: solid; border-width: 7px 6px 0; border-color: var(--t3) transparent transparent; }
+.cde-val small { font-size: 15px; line-height: 20px; margin-top: 0; }
+.cde-val small:empty { display: none; }
+.cde-step:disabled { visibility: hidden; }
+.cde-subbtn { position: relative; height: 34px; margin-top: 3px; padding: 0 14px; font-size: 16px; line-height: 22px; }
+.cde-subbtn::before { content: ""; position: absolute; left: -8px; right: -8px; top: -5px; bottom: -8px; }
+.cde-prev { padding: 0 8px 0 16px; }
+.cde-rel { position: relative; height: 40px; padding: 0 14px; border-radius: 12px; font-size: 17px; line-height: 24px; color: var(--t1); }
+.cde-rel::before { content: ""; position: absolute; left: -3px; right: -3px; top: -6px; bottom: -6px; }
+.cde-prev b { margin-left: 8px; margin-right: 8px; }
+/* the quick-pick grid lies over the steppers and the preview line, so every key is a full finger tall */
+.cde-pick-wrap { z-index: 2; }
+.cde-grid-pane { position: absolute; left: 0; right: 0; top: 0; height: 186px; z-index: 3; padding: 12px 14px; align-items: stretch; }
+.cde-grid { height: auto; grid-auto-rows: 76px; gap: 10px; align-content: start; touch-action: pan-y; }
+.cde-grid.days { grid-auto-rows: 48px; gap: 9px; align-content: start; }
+.cde-grid.years { grid-auto-rows: 48px; gap: 9px; }
+.cde-gbtn, .cde-grid.days .cde-gbtn { height: auto; border-radius: 12px; font-size: 20px; line-height: 26px; padding: 0; }
+.cde-grid.days .cde-gbtn { font-size: 19px; }
+.cde-gback { width: 92px; height: auto; font-size: 19px; }
+.cal-cd-pill, .cde-q { position: relative; }
+.cal-cd-pill::before { content: ""; position: absolute; left: 0; right: 0; top: -4px; bottom: -4px; }
+.cde-q::before { content: ""; position: absolute; left: -2px; right: -2px; top: -3px; bottom: -3px; }
+html[data-theme="light"] .cal-cd-pill:not(.is-today) em { color: var(--fo-ink); }
+html[data-theme="light"] .cp-clean { box-shadow: 0 0 0 1px var(--line); }
+html[data-theme="light"] .cp-item.is-today:not(.sel) { border-color: transparent; }
+html[data-theme="light"] .cde-val { box-shadow: inset 0 0 0 1px var(--line); }
+html[data-theme="light"] .cp-act.del { background: var(--ctl); }
 </style>
 </head>
 <body>
@@ -976,7 +1274,7 @@ html[data-theme="light"] .mlist .msg.unread .m-time { color: var(--ms-ink); }
       <div class="w-days" id="wDays"><div class="w-day"><div class="w-dtx"><div class="w-dl1"><span class="wd">今天</span></div><div class="w-dl2">--</div></div></div><div class="w-day"><div class="w-dtx"><div class="w-dl1"><span class="wd">明天</span></div><div class="w-dl2">--</div></div></div><div class="w-day"><div class="w-dtx"><div class="w-dl1"><span class="wd">后天</span></div><div class="w-dl2">--</div></div></div></div>
     </div>
     <div class="card cal" id="calCard" aria-label="日历">
-      <div class="cal-head"><b id="calTitle"></b><span class="cal-hint" id="calHint">左右滑动换月</span><button class="cal-now" id="calNow">回本月</button><button class="cal-arw" id="calPrev" aria-label="上个月"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button class="cal-arw" id="calNext" aria-label="下个月"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
+      <div class="cal-head"><b id="calTitle"></b><span class="cal-hint" id="calHint">左右滑动换月</span><button class="cal-cd-pill empty" id="calCdPill" type="button" aria-label="倒数日"></button><button class="cal-now" id="calNow">回本月</button><button class="cal-arw" id="calPrev" aria-label="上个月"><svg class="i" viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg></button><button class="cal-arw" id="calNext" aria-label="下个月"><svg class="i" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></button></div>
       <div class="cal-week"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="we">六</span><span class="we">日</span></div>
       <div class="cal-view" id="calView" aria-label="日历，左右滑动切换月份"><div class="cal-track" id="calTrack"><div class="cal-grid"></div><div class="cal-grid"></div><div class="cal-grid"></div></div></div>
     </div>
@@ -1006,6 +1304,49 @@ html[data-theme="light"] .mlist .msg.unread .m-time { color: var(--ms-ink); }
   <nav class="dock" id="dock" aria-label="功能"></nav>
 </div>
 
+<div class="cpage" id="cpage" tabindex="-1" aria-hidden="true" aria-label="倒数日">
+  <header class="cp-head">
+    <button class="tp-home" id="cpHome" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>主页</button>
+    <div class="cp-tabs" id="cpTabs" role="tablist"></div>
+    <div class="cp-head-r">
+      <button class="cp-clean" id="cpCleanBtn" type="button" style="display:none"></button>
+      <button class="cp-add" id="cpAddBtn" type="button"><svg class="i" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg><span>新建倒数日</span></button>
+      <div class="tp-clock num" id="cpClock">--:--</div>
+    </div>
+  </header>
+  <div class="cp-body empty" id="cpBody">
+    <div class="cp-empty" id="cpEmpty">
+      <div class="cp-empty-hd">
+        <h4>记录家里重要的日子</h4>
+        <p>点选下方卡片免打字快速创建 · 也可在手机对讲页添加，或对小麦说「帮我加个倒数日」</p>
+      </div>
+      <div class="cp-tpl-grid" id="cpStarters">
+        <button class="cp-tpl" data-tpl="exam" type="button">
+          <div class="cp-tpl-ico"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/></svg></div>
+          <div class="cp-tpl-tx"><b>重要考试 · 目标倒数</b><span>如：姐姐中考、期末考、重要目标倒数</span></div>
+          <em class="cp-tpl-go">+ 添加</em>
+        </button>
+        <button class="cp-tpl" data-tpl="lunar_bday" type="button">
+          <div class="cp-tpl-ico"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="10" width="18" height="10" rx="2"/><path d="M7 10V7a1 1 0 0 1 2 0v3M11 10V6a1 1 0 0 1 2 0v4M15 10V7a1 1 0 0 1 2 0v3M3 15h18"/></svg></div>
+          <div class="cp-tpl-tx"><b>家人生日 · 公历与农历</b><span>如：妈妈农历生日、每年自动算周岁</span></div>
+          <em class="cp-tpl-go">+ 添加</em>
+        </button>
+        <button class="cp-tpl" data-tpl="solar_anniv" type="button">
+          <div class="cp-tpl-ico"><svg class="i" viewBox="0 0 24 24"><path d="M12 20.5s-7-4.4-7-10a4 4 0 0 1 7-2.6A4 4 0 0 1 19 10.5c0 5.6-7 10-7 10z"/></svg></div>
+          <div class="cp-tpl-tx"><b>结婚与家庭纪念日</b><span>如：结婚纪念日、每年循环自动算周年</span></div>
+          <em class="cp-tpl-go">+ 添加</em>
+        </button>
+        <button class="cp-tpl" data-tpl="countup" type="button">
+          <div class="cp-tpl-ico"><svg class="i" viewBox="0 0 24 24"><path d="M4 18l5-5 4 4 7-8"/><path d="M15 9h5v5"/></svg></div>
+          <div class="cp-tpl-tx"><b>累计正数日 · 每日坚持</b><span>如：每日坚持阅读、打卡百日里程碑</span></div>
+          <em class="cp-tpl-go">+ 添加</em>
+        </button>
+      </div>
+    </div>
+    <div class="cp-hero" id="cpHero" style="display:none"></div>
+    <div class="cp-list-wrap" id="cpListWrap" style="display:none"><div class="cp-list" id="cpList"></div></div>
+  </div>
+</div>
 <div class="wpage" id="wpage" tabindex="-1" aria-hidden="true" aria-label="天气详情">
   <header class="wp-head">
     <button class="tp-home" id="wpHome"><svg class="i" viewBox="0 0 24 24"><path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/></svg>主页</button>
@@ -1176,7 +1517,11 @@ const ICONS = {
   shuffle: '<path d="M3 7h4l10 10h4M3 17h4l3-3M14 10l3-3h4M18 4l3 3-3 3M18 14l3 3-3 3"/>',
   reply: '<path d="M9 14L4 9l5-5"/><path d="M4 9h10a6 6 0 0 1 6 6v4"/>',
   house: '<path d="M4 11l8-7 8 7v9H4z"/><path d="M10 20v-6h4v6"/>',
-  alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 1.5M5 4L3 6M19 4l2 2"/>'
+  alarm: '<circle cx="12" cy="13" r="7"/><path d="M12 10v3l2 1.5M5 4L3 6M19 4l2 2"/>',
+  flag: '<rect x="3" y="4" width="18" height="17" rx="3"/><path d="M8 2v4M16 2v4M3 9.5h18M9 14.5l2 2 4-4"/>',
+  pin: '<path d="M12 17v5M8 3h8l-1.5 6 3 3v2H6.5v-2l3-3z"/>',
+  edit: '<path d="M4 20h4L18.5 9.5a2.1 2.1 0 0 0-3-3L5 17v3z"/>',
+  trash: '<path d="M4 7h16M9 7V4h6v3M6.5 7l1 13h9l1-13"/>'
 };
 ICONS.tomato = ICONS.timer;
 ICONS.moon = '<path d="M20 14.5A8 8 0 1 1 9.5 4a6.5 6.5 0 0 0 10.5 10.5z"/>';
@@ -1257,7 +1602,7 @@ function tickClock() {
   if (hh !== lastHH) { hhEl.textContent = hh; if (lastHH) replay(hhEl, 'tick'); lastHH = hh; }
   if (mm !== lastMM) { mmEl.textContent = mm; if (lastMM) replay(mmEl, 'tick'); lastMM = mm; }
   setText($('date'), `${d.getMonth() + 1}月${d.getDate()}日 ${WEEK[d.getDay()]}`);
-  setText($('tpClock'), `${hh}:${mm}`); setText($('trClock'), `${hh}:${mm}`); setText($('ntClock'), `${hh}:${mm}`); setText($('wpClock'), `${hh}:${mm}`);
+  setText($('tpClock'), `${hh}:${mm}`); setText($('trClock'), `${hh}:${mm}`); setText($('ntClock'), `${hh}:${mm}`); setText($('wpClock'), `${hh}:${mm}`); setText($('cpClock'), `${hh}:${mm}`);
   if ($('mpClock')) setText($('mpClock'), `${hh}:${mm}`);
   if (typeof tpOpen === 'function' && tpOpen() && $('tpage').dataset.view === 'night') renderNight();
   if (typeof tpOpen === 'function' && tpOpen() && $('tpage').dataset.view === 'setup' && $('tpage').dataset.mode === 'sleep') setText($('spEnd'), spSummary());
@@ -1266,6 +1611,8 @@ function tickClock() {
   if (day !== lastDay) {
     lastDay = day;
     loadCalendar();
+    invalidateStateEtag();
+    if (typeof cpOpen === 'function' && cpOpen()) loadCountdowns(true);
     if (st) renderSide();
     const list = $('mlist');
     if (list && list.isConnected && Array.isArray(msgCache)) paintMsgList(list, msgCache, modalEpoch);
@@ -1296,8 +1643,12 @@ function fetchMonth(v) {
 }
 function cellsHtml(j) {
   return j.month.days.map(c => {
-    const cls = ['cd', c.inMonth ? '' : 'out', c.weekend ? 'we' : '', c.today ? 'today' : '', c.kind ? 'k-' + c.kind : '', c.hol ? 'h-' + c.hol : ''].join(' ');
-    return `<div class="${cls}">${c.hol ? `<i>${c.hol === 'work' ? '班' : '休'}</i>` : ''}<b>${c.d}</b><small>${esc(c.label)}</small></div>`;
+    const cds = Array.isArray(c.cd) && c.cd.length ? c.cd : null;
+    const m0 = cds ? cds[0] : null;
+    const cls = ['cd', c.inMonth ? '' : 'out', c.weekend ? 'we' : '', c.today ? 'today' : '', c.kind ? 'k-' + c.kind : '', c.hol ? 'h-' + c.hol : '', m0 ? `has-cd cd-${m0.category || 'life'}` : ''].filter(Boolean).join(' ');
+    const sub = m0 ? (cds.length > 1 ? `${m0.title.slice(0, 3)}+` : m0.title.slice(0, 4)) : c.label;
+    const dotHtml = m0 ? `<u class="cd-dot${cds.length > 1 ? ' multi' : ''}"></u>` : '';
+    return `<div class="${cls}" data-date="${esc(c.date || '')}"${m0 ? ` data-cdid="${esc(m0.id)}"` : ''}>${dotHtml}${c.hol ? `<i>${c.hol === 'work' ? '班' : '休'}</i>` : ''}<b>${c.d}</b><small>${esc(sub)}</small></div>`;
   }).join('');
 }
 function fillPanel(el, v) {
@@ -1323,6 +1674,7 @@ function calTitle() {
   const wantNow = (calView.y === t.y && calView.m === t.m) ? 'none' : 'inline-flex', cn = $('calNow');
   if (cn.style.display !== wantNow) { cn.style.display = wantNow; if (wantNow !== 'none') replay(cn, 'pop'); else cn.classList.remove('pop'); }
   setDisp($('calHint'), wantNow === 'none' ? '' : 'none');
+  if (typeof renderCalCdPill === 'function') renderCalCdPill();
 }
 function calFillAll() {
   const [a, b, c] = calPanels();
@@ -1409,10 +1761,12 @@ window.addEventListener('resize', calLayout);
     while (pts.length > 2 && now - pts[0][1] > 100) pts.shift();
     if (!dragRaf) dragRaf = requestAnimationFrame(() => { dragRaf = 0; if (on && axis === 'x') calSet(-calW + dx, 0); });
   }
+  let lastDragTs = 0;
   function end() {
     if (!on) return;
     on = false;
     cancelDragRaf();
+    if (axis) lastDragTs = Date.now();
     if (axis !== 'x') { $('calTrack').classList.remove('moving'); return; }
     calSet(-calW + dx, 0);
     const [x0, t0] = pts[0], [x1, t1] = pts[pts.length - 1];
@@ -1445,6 +1799,13 @@ window.addEventListener('resize', calLayout);
   view.addEventListener('mousedown', e => { if (Date.now() - lastTouch > 700 && e.button === 0) start(e.clientX, e.clientY); });
   window.addEventListener('mousemove', e => { if (on && Date.now() - lastTouch > 700) move(e.clientX, e.clientY, e); });
   window.addEventListener('mouseup', () => { if (on && Date.now() - lastTouch > 700) end(); });
+  view.addEventListener('click', e => {
+    if (Date.now() - lastDragTs < 360 || calAnim) return;
+    const cell = e.target.closest('.cd[data-date]');
+    if (!cell || !cell.dataset.date) return;
+    if (cell.dataset.cdid) openCountdownPage(cell.dataset.cdid);
+    else openCountdownPage(null, cell.dataset.date);
+  });
 })();
 
 /* ---------- weather ---------- */
@@ -1902,6 +2263,7 @@ async function loadApps() {
 }
 function runApp(a) {
   if (wpOpen()) closeWeatherPage();
+  if (cpOpen()) closeCountdownPage();
   const act = (a && a.action) || {};
   switch (act.type) {
     case 'xiaozhi': return post({ cmd: 'xiaozhi' });
@@ -1945,7 +2307,7 @@ function nextPollDelay() {
   const ambOn = !!(st && st.music && st.music.ambient);
   const idleStill = document.body.classList.contains('still') && !(mBase && mBase.playing) && !ambOn && !tmrOn
     && !(st && st.study && st.study.focus && st.study.focus.phase)
-    && !$('modal').classList.contains('show') && !tpOpen() && !wpOpen();
+    && !$('modal').classList.contains('show') && !tpOpen() && !wpOpen() && !cpOpen();
   return idleStill ? 3500 : 2000;
 }
 async function poll() {
@@ -1969,7 +2331,41 @@ async function poll() {
   if (visible && !document.hidden) pollT = setTimeout(poll, nextPollDelay());
 }
 let ambReqSeq = 0, ambHoldUntil = 0;
+let lastCdSeq = 0, lastLocalCdOpenSeq = null, lastLocalCdCloseSeq = null;
 function render() {
+  const cdOpenSeq = (st && st.countdowns && Number(st.countdowns.open_seq)) || 0;
+  const cdCloseSeq = (st && st.countdowns && Number(st.countdowns.close_seq)) || 0;
+  if (lastLocalCdOpenSeq === null) {
+    lastLocalCdOpenSeq = cdOpenSeq;
+  } else if (cdOpenSeq > lastLocalCdOpenSeq) {
+    lastLocalCdOpenSeq = cdOpenSeq;
+    if (st && st.countdowns && st.countdowns.open_fresh && !document.body.classList.contains('ringing')) {
+      openCountdownPage();
+    }
+  }
+  if (lastLocalCdCloseSeq === null) {
+    lastLocalCdCloseSeq = cdCloseSeq;
+  } else if (cdCloseSeq > lastLocalCdCloseSeq) {
+    lastLocalCdCloseSeq = cdCloseSeq;
+    if (st && st.countdowns && st.countdowns.close_fresh) {
+      if ($('modal').classList.contains('cd-edit')) closeModal();
+      closeCountdownPage();
+    }
+  }
+  const cdSeq = (st && st.countdowns && st.countdowns.seq) || 0;
+  if (cdSeq !== lastCdSeq) {
+    const hadPrev = lastCdSeq !== 0;
+    lastCdSeq = cdSeq;
+    renderCalCdPill();
+    if (hadPrev) {
+      calCache.clear();
+      calPanels().forEach(p => { p.dataset.k = ''; p.dataset.ok = ''; });
+      calFillAll();
+      if (cpOpen()) loadCountdowns(true);
+    }
+  } else {
+    renderCalCdPill();
+  }
   renderMusic(st.music);
   renderTimerUi();
   renderSide();
@@ -2499,7 +2895,7 @@ function openModal(html, wide = false, setup = null) {
   clearTimeout(modalCleanT); modalCleanT = 0;
   const m = $('modal'), wasShown = m.classList.contains('show');
   if (!wasShown) modalFocus = document.activeElement;
-  m.classList.remove('amb-lab', 'msg-page');
+  m.classList.remove('amb-lab', 'msg-page', 'cd-edit');
   m.classList.toggle('wide', !!wide);
   m.innerHTML = html;
   if (setup) setup(m, modalEpoch);
@@ -2513,13 +2909,14 @@ function closeModal() {
   modalEpoch++;
   clearTimeout(modalCleanT);
   $('modal').classList.remove('show'); $('shade').classList.remove('show');
-  modalCleanT = setTimeout(() => { modalCleanT = 0; if (!$('modal').classList.contains('show')) { $('modal').classList.remove('wide', 'amb-lab', 'msg-page'); $('modal').innerHTML = ''; } }, 130);
+  modalCleanT = setTimeout(() => { modalCleanT = 0; if (!$('modal').classList.contains('show')) { $('modal').classList.remove('wide', 'amb-lab', 'msg-page', 'cd-edit'); $('modal').innerHTML = ''; } }, 130);
   if (modalFocus?.isConnected) modalFocus.focus({ preventScroll: true }); modalFocus = null;
 }
 document.addEventListener('keydown', e => {
   if (!$('modal').classList.contains('show')) {
     if (e.key === 'Escape' && tpOpen()) { e.preventDefault(); closeTimerPage(); return; }
     if (e.key === 'Escape' && wpOpen()) { e.preventDefault(); closeWeatherPage(); return; }
+    if (e.key === 'Escape' && cpOpen()) { e.preventDefault(); closeCountdownPage(); return; }
     return;
   }
   if (e.key === 'Escape') { e.preventDefault(); closeModal(); }
@@ -3382,6 +3779,7 @@ async function fetchSleepInfo(force = false) {
     if (j && typeof j.wake_time === 'string' && !spWakeSaveT) spWakeTime = j.wake_time;
     if (j && j.wake_next && typeof j.wake_next === 'object') spWakeNext = j.wake_next;
     saveSpPick();
+    if (cpOpen()) loadCountdowns(false);
     if (tpOpen()) renderTpage();
     renderSleepBits();
   } catch (e) {}
@@ -3876,10 +4274,50 @@ function renderSide() {
   const isLatestVoice = !!(latest && latest.kind === 'voice');
   const isSidePlaying = isLatestVoice && scrPlayId === latest.id;
   const unreadN = Number(st.messages && st.messages.unread) || 0;
-  const sig = 'm:' + new Date().toDateString() + ':' + (latest ? `${latest.id}:${!!latest.read_at}:${latest.source || ''}:${latest.kind || ''}:${isSidePlaying ? 1 : 0}:${latest.text}` : '') + '|' + (tf ? tf.sessions + ':' + tf.minutes : '') + '|' + unreadN;
+  const cdInfo = (!latestFromPhoneUnread && !isSidePlaying && st && st.countdowns) ? st.countdowns : null;
+  const tdFirst = (cdInfo && Array.isArray(cdInfo.today_items) && cdInfo.today_items[0]) || null;
+  const topCd = tdFirst || (cdInfo && cdInfo.top) || null;
+  const runnerCd = topCd ? ((tdFirst && cdInfo.top && cdInfo.top.id !== tdFirst.id) ? cdInfo.top : (cdInfo.next && cdInfo.next.id !== topCd.id ? cdInfo.next : null)) : null;
+  const cdCount = (cdInfo && Number(cdInfo.count)) || 0;
+  const cdSigPart = topCd ? `${topCd.id}:${topCd.title}:${topCd.days}:${topCd.kind}:${topCd.category}:${topCd.anniv_label || ''}:${runnerCd ? runnerCd.id + ':' + runnerCd.days : ''}:${cdCount}` : '';
+  const sig = 'm:' + new Date().toDateString() + ':' + (latest ? `${latest.id}:${!!latest.read_at}:${latest.source || ''}:${latest.kind || ''}:${isSidePlaying ? 1 : 0}:${latest.text}` : '') + '|' + (tf ? tf.sessions + ':' + tf.minutes : '') + '|' + unreadN + '|cd:' + cdSigPart;
   if (sig === sideSig) return; sideSig = sig;
   const fresh = !!latest && sideMsgId !== null && latest.id !== sideMsgId;
   sideMsgId = latest ? latest.id : '';
+  if (topCd) {
+    sideState('st-cd');
+    const isTd = topCd.kind !== 'countup' && topCd.days === 0;
+    const subParts = [];
+    if (topCd.anniv_label) subParts.push(topCd.anniv_label);
+    if (topCd.kind === 'countup') subParts.push(`${cdDateText(topCd.target_date)} 起`);
+    else if (!isTd) subParts.push(cdDateText(topCd.target_date));
+    if (topCd.kind === 'yearly_lunar' && topCd.lunar_str) subParts.push(topCd.lunar_str);
+    if (!subParts.length) subParts.push(isTd ? '就是今天' : (topCd.rule_label || ''));
+    const runnerBadge = runnerCd ? (() => {
+      const rt = runnerCd.title.length > 5 ? runnerCd.title.slice(0, 5) : runnerCd.title;
+      const rd = runnerCd.kind === 'countup' ? `已${runnerCd.days}天` : (runnerCd.days === 0 ? '今天' : `${runnerCd.days}天`);
+      return `下个：${rt} ${rd}`;
+    })() : (topCd.span_hint && topCd.days > 2 ? topCd.span_hint : (topCd.anniv_label || topCd.rule_label || ''));
+    const numHtml = topCd.kind === 'countup'
+      ? `<span>累计</span><em class="num">${topCd.days}</em><span>天</span>`
+      : (isTd ? `<em>今天</em>` : `<span>还有</span><em class="num">${topCd.days}</em><span>天</span>`);
+    const sHomeBtnCd = `<button class="s-btn" id="sHome">${svg('house')}我到家了</button>`;
+    const msgBtnLbl = latest ? `留言板 · ${(latest.who || (latest.source === 'screen' ? '已回' : '最新'))}` : '留言板';
+    const allLbl = cdCount > 1 ? `全部 ${cdCount}` : '全部';
+    $('side').innerHTML = `<div class="s-head">${svg('flag')}<b>倒数日</b><span class="s-meta">${esc(runnerBadge)}</span><button class="s-all" id="sCdAll">${esc(allLbl)}${svg('chev')}</button></div>`
+      + `<div class="s-cd-box${isTd ? ' is-today' : ''}" id="sCdBox"><div class="s-cd-l"><b>${esc(topCd.title)}</b><small>${esc(subParts.join(' · '))}</small></div><div class="s-cd-r cat-${esc(topCd.category || 'life')}${isTd ? ' is-today' : ''}">${numHtml}</div></div>`
+      + `<div class="s-btns">${sHomeBtnCd}<button class="s-btn" id="sReply">${svg('message')}${esc(msgBtnLbl)}</button></div>`;
+    $('sCdAll').onclick = () => openCountdownPage(topCd.id);
+    $('sCdBox').onclick = () => openCountdownPage(topCd.id);
+    $('sHome').onclick = e => {
+      e.stopPropagation();
+      if (scrRecOn || scrRecBusy) { toast('正在录音，请先发送或取消'); return; }
+      const who = scrWhoNow();
+      if (who || msgFamilyList.length < 2) sendArrivedHome(who); else openArrivedWho();
+    };
+    $('sReply').onclick = openMessages;
+    return;
+  }
   sideState(latestFromPhoneUnread ? 'st-unread' : '');
   const metaTxt = latest ? (latestFromPhoneUnread ? `${unreadN > 1 ? unreadN + ' 条新留言' : (latest.due ? '提醒' : '新留言')}${latest.who ? ' · ' + latest.who : ''} · ${relTime(latest.due && latest.fired ? latest.due : latest.at)}` : (latest.source === 'screen' ? `${latest.due && !latest.fired ? '待提醒' : '已回复'}${latest.who ? ' · ' + latest.who : ''} · ` + relTime(latest.at) : `${latest.who ? latest.who + ' · ' : ''}` + relTime(latest.at))) : '';
   const vSec = isLatestVoice ? Math.max(1, Math.round(Number(latest.duration) || 3)) : 0;
@@ -4437,6 +4875,7 @@ window.addEventListener('message', e => {
   if (typeof d.inboxAckFail === 'string' && scrPlayId === d.inboxAckFail) clearScrPlayUi();
   if (d.stopClip && scrPlayId) { clearScrPlayUi(); api('/api/home/messages/play', { stop: true }).catch(() => {}); }
   if (d.inboxRefresh) { invalidateStateEtag(); etagCache.delete('/api/home/messages?limit=20'); refreshMsgCache(true); setTimeout(poll, 80); }
+  if (d.openCountdown) { openCountdownPage(); }
 });
 document.addEventListener('visibilitychange', () => setVisible(parentVisible));
 let weatherAt = 0, weatherTimer = 0;
@@ -4470,6 +4909,788 @@ $('wpRef').onclick = () => loadWeatherDetail(true, wpCurCity);
   hs.addEventListener('pointercancel', end);
 })();
 syncWeatherTimer();
+
+
+/* ---------- 倒数日 / 纪念日 / 生日 (#cpage & touch editor, 2026-11-13 R2) ---------- */
+const CD_CAT_META = {
+  all: '全部',
+  exam: '考试日程',
+  birthday: '生日',
+  anniv: '纪念日',
+  life: '生活',
+  countup: '正数日'
+};
+const CD_CAT_NAME = { exam: '考试日程', birthday: '生日', anniv: '纪念日', life: '生活纪念' };
+const CD_LUNAR_M = ['', '正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月'];
+const CD_LUNAR_D = ['', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+  '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+  '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十'];
+const CD_EXTRA_WHO = ['全家', '爷爷', '奶奶', '姥姥', '姥爷'];
+function getCdWhoChips() {
+  const out = [];
+  for (const w of (Array.isArray(msgFamilyList) ? msgFamilyList : []).concat(CD_EXTRA_WHO)) {
+    if (w && !out.includes(w)) out.push(w);
+  }
+  return out;
+}
+function nextSmartMonthDay(m, d) {
+  const n = new Date(), curY = n.getFullYear();
+  const cand = new Date(curY, m - 1, d);
+  const today0 = new Date(curY, n.getMonth(), n.getDate());
+  const yr = cand <= today0 ? curY + 1 : curY;
+  return `${yr}-${pad(m)}-${pad(d)}`;
+}
+function smartExamDate(kindKey) {
+  const n = new Date(), m = n.getMonth() + 1;
+  if (kindKey === 'gaokao') return nextSmartMonthDay(6, 7);
+  if (kindKey === 'zhongkao') return nextSmartMonthDay(6, 20);
+  if (kindKey === 'final') return (m >= 2 && m <= 6) ? nextSmartMonthDay(6, 28) : nextSmartMonthDay(1, 15);
+  if (kindKey === 'school') return (m >= 3 && m <= 8) ? nextSmartMonthDay(9, 1) : nextSmartMonthDay(2, 24);
+  if (kindKey === 'vacation') return (m >= 2 && m <= 7) ? nextSmartMonthDay(7, 10) : nextSmartMonthDay(1, 20);
+  const plus30 = new Date(n.getTime() + 30 * 86400000);
+  return `${plus30.getFullYear()}-${pad(plus30.getMonth() + 1)}-${pad(plus30.getDate())}`;
+}
+const CD_EVT_CHIPS = [
+  { t: '生日', mode: 'yearly', cal: 'lunar', cat: 'birthday' },
+  { t: '中考', mode: 'once', cal: 'solar', cat: 'exam', smart: 'zhongkao' },
+  { t: '高考', mode: 'once', cal: 'solar', cat: 'exam', smart: 'gaokao' },
+  { t: '期末考', mode: 'once', cal: 'solar', cat: 'exam', smart: 'final' },
+  { t: '开学', mode: 'once', cal: 'solar', cat: 'exam', smart: 'school' },
+  { t: '放假', mode: 'once', cal: 'solar', cat: 'exam', smart: 'vacation' },
+  { t: '结婚纪念日', mode: 'yearly', cal: 'solar', cat: 'anniv' },
+  { t: '旅行', mode: 'once', cal: 'solar', cat: 'life' },
+  { t: '坚持打卡', mode: 'countup', cal: 'solar', cat: 'life' }
+];
+let cdItems = [], cdTab = 'all', cdSelId = '', cdDelConfirmId = '', cdDelTimer = 0, cdCleanConfirm = false, cdCleanTimer = 0, cdLoading = false;
+
+// 2027-06-20 -> 「2027年6月20日 星期日」 (long) or 「6月20日 周日」 (this year's dates leave the year out)
+function cdDateText(iso, long, noYear) {
+  const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!mm) return iso || '';
+  const yy = +mm[1], mo = +mm[2], dd = +mm[3];
+  const wd = '日一二三四五六'[new Date(yy, mo - 1, dd).getDay()];
+  if (noYear) return `${mo}月${dd}日`;
+  return `${(long || yy !== new Date().getFullYear()) ? yy + '年' : ''}${mo}月${dd}日 ${long ? '星期' : '周'}${wd}`;
+}
+// the line under the bar says only what the big number does not: weeks and months when far, the date when near
+function cdCaption(it) {
+  if (it.kind === 'countup') return it.span_hint || '';
+  if (it.days > 13) return it.span_hint || '';
+  if (it.days > 0) return `${it.days <= 2 ? it.span_hint + ' · ' : ''}${cdDateText(it.target_date)}`;
+  return '';
+}
+function cpOpen() { return $('cpage').classList.contains('show'); }
+
+function renderCalCdPill() {
+  const btn = $('calCdPill');
+  if (!btn || !calView) return;
+  const t = thisMonth();
+  const isCurMonth = (calView.y === t.y && calView.m === t.m);
+  if (!isCurMonth) { setDisp(btn, 'none'); return; }
+  setDisp(btn, 'inline-flex');
+  const cdInfo = st && st.countdowns;
+  const tdFirst = cdInfo && Array.isArray(cdInfo.today_items) && cdInfo.today_items[0];
+  const top = tdFirst || (cdInfo && cdInfo.top);
+  if (!top) {
+    const sig = 'empty';
+    if (btn.dataset.sig !== sig) {
+      btn.dataset.sig = sig;
+      btn.className = 'cal-cd-pill empty';
+      btn.innerHTML = `${svg('flag')}<span class="ccp-t">倒数日</span>`;
+    }
+    return;
+  }
+  const isTd = top.kind !== 'countup' && top.days === 0;
+  const badgeTxt = top.kind === 'countup' ? `已${top.days}天` : (isTd ? '今天' : `${top.days}天`);
+  const shortT = top.title.length > 4 ? top.title.slice(0, 4) : top.title;
+  const isShort = (shortT.length + badgeTxt.length) <= 6;
+  const sig = `${top.id}:${shortT}:${badgeTxt}:${isTd ? 1 : 0}:${isShort ? 1 : 0}`;
+  if (btn.dataset.sig === sig) return;
+  btn.dataset.sig = sig;
+  btn.className = `cal-cd-pill has-top${isShort ? ' short' : ''}${isTd ? ' is-today' : ''}`;
+  btn.innerHTML = `<span class="ccp-t">${esc(shortT)}</span><em class="num">${esc(badgeTxt)}</em>`;
+}
+
+$('calCdPill').onclick = e => {
+  e.stopPropagation();
+  const cdInfo = st && st.countdowns;
+  const tdFirst = cdInfo && Array.isArray(cdInfo.today_items) && cdInfo.today_items[0];
+  openCountdownPage(tdFirst ? tdFirst.id : null);
+};
+$('cpHome').onclick = closeCountdownPage;
+$('cpAddBtn').onclick = () => openCdEditModal(null);
+$('cpStarters').onclick = e => {
+  const b = e.target.closest('[data-tpl]');
+  if (!b) return;
+  const tpl = b.dataset.tpl;
+  if (tpl === 'exam') openCdEditModal({ _preset: true, title: '姐姐期末考', kind: 'once', category: 'exam', date: smartExamDate('final') });
+  else if (tpl === 'lunar_bday') openCdEditModal({ _preset: true, title: '妈妈生日', kind: 'yearly_lunar', category: 'birthday' });
+  else if (tpl === 'solar_anniv') openCdEditModal({ _preset: true, title: '结婚纪念日', kind: 'yearly_solar', category: 'anniv' });
+  else if (tpl === 'countup') openCdEditModal({ _preset: true, title: '每日坚持阅读', kind: 'countup', category: 'life' });
+};
+$('cpCleanBtn').onclick = async () => {
+  if (!cdCleanConfirm) {
+    cdCleanConfirm = true;
+    clearTimeout(cdCleanTimer);
+    cdCleanTimer = setTimeout(() => { cdCleanConfirm = false; if (cpOpen()) renderCountdownPage(); }, 3500);
+    renderCountdownPage();
+    return;
+  }
+  cdCleanConfirm = false;
+  clearTimeout(cdCleanTimer);
+  try {
+    const j = await api('/api/home/countdowns/delete', { clear_expired: true });
+    if (j && j.ok) {
+      toast(`已清理 ${j.cleared || 0} 条过期倒数日`);
+      invalidateStateEtag();
+      calCache.clear(); calPanels().forEach(p => { p.dataset.k = ''; p.dataset.ok = ''; }); calFillAll();
+      await loadCountdowns(true);
+      poll();
+    }
+  } catch (err) { toast(err.message || '清理失败'); }
+};
+
+function openCountdownPage(selectId = null, prefillDate = '') {
+  if (wpOpen()) closeWeatherPage();
+  if (tpOpen()) closeTimerPage();
+  const cp = $('cpage');
+  if (!cp.classList.contains('show')) {
+    cp.classList.add('show');
+    cp.setAttribute('aria-hidden', 'false');
+  }
+  const now = new Date();
+  setText($('cpClock'), `${pad(now.getHours())}:${pad(now.getMinutes())}`);
+  if (selectId) { cdTab = 'all'; cdSelId = selectId; }
+  renderCountdownPage();
+  loadCountdowns(true).then(() => {
+    if (selectId) { cdSelId = selectId; renderCountdownPage(); }
+    if (prefillDate) openCdEditModal(null, prefillDate);
+  });
+  if (!$('modal').classList.contains('show') && !cp.contains(document.activeElement)) cp.focus({ preventScroll: true });
+}
+
+function closeCountdownPage() {
+  const cp = $('cpage');
+  if (!cp.classList.contains('show')) return;
+  cp.classList.remove('show');
+  cp.setAttribute('aria-hidden', 'true');
+  cdDelConfirmId = '';
+  cdCleanConfirm = false;
+  if (cp.contains(document.activeElement)) document.activeElement.blur();
+}
+
+async function loadCountdowns(force = false) {
+  if (cdLoading && !force) return;
+  cdLoading = true;
+  try {
+    if (force) etagCache.delete('/api/home/countdowns');
+    const res = await apiCached('/api/home/countdowns');
+    const d = res && res.data;
+    if (d && d.ok && Array.isArray(d.items)) {
+      cdItems = d.items;
+      if (Array.isArray(d.family) && d.family.length) msgFamilyList = d.family.filter(x => typeof x === 'string');
+      if (cpOpen()) renderCountdownPage();
+    }
+  } catch (e) {} finally {
+    cdLoading = false;
+  }
+}
+
+function filteredCdItems() {
+  if (cdTab === 'all') return cdItems;
+  if (cdTab === 'countup') return cdItems.filter(x => x.kind === 'countup');
+  return cdItems.filter(x => x.category === cdTab && x.kind !== 'countup');
+}
+
+function renderCpTabs() {
+  const counts = {
+    all: cdItems.length,
+    exam: cdItems.filter(x => x.category === 'exam' && x.kind !== 'countup').length,
+    birthday: cdItems.filter(x => x.category === 'birthday' && x.kind !== 'countup').length,
+    anniv: cdItems.filter(x => x.category === 'anniv' && x.kind !== 'countup').length,
+    life: cdItems.filter(x => x.category === 'life' && x.kind !== 'countup').length,
+    countup: cdItems.filter(x => x.kind === 'countup').length
+  };
+  $('cpTabs').innerHTML = Object.entries(CD_CAT_META).map(([k, lbl]) => {
+    const on = cdTab === k;
+    return `<button class="cp-tab${on ? ' on' : ''}" role="tab" aria-selected="${on}" data-tab="${k}" type="button"><span>${lbl}</span>${counts[k] ? `<em class="num">${counts[k]}</em>` : ''}</button>`;
+  }).join('');
+  const expN = cdItems.filter(x => x.kind === 'once' && x.days < 0).length;
+  const cBtn = $('cpCleanBtn');
+  if (cBtn) {
+    setDisp(cBtn, expN > 0 ? 'inline-flex' : 'none');
+    if (expN > 0) {
+      cBtn.className = `cp-clean${cdCleanConfirm ? ' sure' : ''}`;
+      cBtn.textContent = cdCleanConfirm ? `确认清理 ${expN} 条` : `清理过期 ${expN}`;
+    }
+  }
+}
+$('cpTabs').onclick = e => {
+  const b = e.target.closest('[data-tab]');
+  if (!b) return;
+  cdTab = b.dataset.tab;
+  cdDelConfirmId = '';
+  renderCountdownPage();
+};
+
+function renderCountdownPage() {
+  renderCpTabs();
+  const body = $('cpBody'), emptyEl = $('cpEmpty'), heroEl = $('cpHero'), listWrap = $('cpListWrap'), listEl = $('cpList');
+  if (!cdItems.length) {
+    body.classList.add('empty');
+    setDisp(emptyEl, 'flex');
+    setDisp(heroEl, 'none');
+    setDisp(listWrap, 'none');
+    return;
+  }
+  const list = filteredCdItems();
+  body.classList.remove('empty');
+  setDisp(emptyEl, 'none');
+  setDisp(heroEl, 'flex');
+  setDisp(listWrap, 'flex');
+
+  let cur = list.find(x => x.id === cdSelId) || list.find(x => x.kind !== 'countup' && x.days === 0) || list[0] || cdItems[0];
+  if (cur) cdSelId = cur.id;
+
+  if (cur) {
+    const isPast = cur.kind === 'once' && cur.days < 0;
+    const isTd = cur.kind !== 'countup' && cur.days === 0;
+    heroEl.className = `cp-hero${isPast ? ' past' : ''}${isTd ? ' is-today' : ''}`;
+    heroEl.dataset.cat = cur.category || 'life';
+    const catLbl = cur.kind === 'countup' ? '累计正数日' : (CD_CAT_NAME[cur.category] || '重要日子');
+    let numBlock;
+    if (cur.kind === 'countup') {
+      numBlock = cur.days >= 0
+        ? `<span>已累计</span><b class="num">${cur.days}</b><span>天</span>`
+        : `<span>距离开始</span><b class="num">${Math.abs(cur.days)}</b><span>天</span>`;
+    } else if (isTd) {
+      numBlock = `<b class="txt">就是今天</b>`;
+    } else if (cur.days > 0) {
+      numBlock = `<span>还有</span><b class="num">${cur.days}</b><span>天</span>`;
+    } else {
+      numBlock = `<span>已过去</span><b class="num">${Math.abs(cur.days)}</b><span>天</span>`;
+    }
+    const pct = Math.max(4, Math.min(100, Number(cur.progress_pct) || 50));
+    const cap = cdCaption(cur);
+    const delSure = cdDelConfirmId === cur.id;
+    heroEl.innerHTML = `
+      <div>
+        <div class="cp-h-top">
+          <span class="cp-pill cat-${esc(cur.category || 'life')}">${esc(catLbl)}</span>
+          ${cur.anniv_label ? `<span class="cp-pill anniv">${esc(cur.anniv_label)}</span>` : ''}
+          ${cur.pinned ? `<span class="cp-pill pin">主页置顶</span>` : ''}
+        </div>
+        <div class="cp-h-title">${esc(cur.title)}</div>
+      </div>
+      <div class="cp-h-mid">
+        <div class="cp-h-num">${numBlock}</div>
+        ${(cur.kind === 'countup' ? cur.days >= 0 : cur.days > 0) ? `<div class="cp-prog"><div class="cp-prog-bar"><div class="cp-prog-fill" style="width:${pct}%"></div></div>${cap ? `<div class="cp-prog-top"><span>${esc(cap)}</span></div>` : ''}</div>` : ''}
+      </div>
+      <div>
+        <div class="cp-h-meta">
+          <div><span>${cur.kind === 'countup' ? '开始' : (cur.kind.startsWith('yearly_') && !isTd ? '下一次' : '日期')}</span><strong>${esc(cdDateText(cur.target_date, true))}</strong></div>
+          ${cur.lunar_str ? `<div><span>农历</span><strong>${esc(cur.lunar_str.replace(/^农历/, ''))}</strong></div>` : ''}
+          ${cur.kind === 'countup' ? '' : `<div><span>重复</span><strong>${cur.kind === 'once' ? '只这一次' : esc(cur.rule_label || '') + (cur.start_year ? ` · ${cur.start_year}年起` : '')}</strong></div>`}
+        </div>
+        <div class="cp-h-acts">
+          <button class="cp-act${cur.pinned ? ' on' : ''}" id="cpActPin" type="button">${svg('pin')}<span>${cur.pinned ? '已置顶' : '置顶到主页'}</span></button>
+          <button class="cp-act" id="cpActEdit" type="button">${svg('edit')}<span>编辑</span></button>
+          <button class="cp-act del${delSure ? ' sure' : ''}" id="cpActDel" type="button">${svg('trash')}<span>${delSure ? '确认删除' : '删除'}</span></button>
+        </div>
+      </div>`;
+    $('cpActPin').onclick = () => toggleCdPin(cur);
+    $('cpActEdit').onclick = () => openCdEditModal(cur);
+    $('cpActDel').onclick = () => handleCdDelete(cur);
+  }
+
+  if (!list.length) {
+    listEl.innerHTML = `<div class="cp-list-empty">这一类还没有，点右上角「新建倒数日」添加</div>`;
+    return;
+  }
+  listEl.innerHTML = list.map(it => {
+    const isPast = it.kind === 'once' && it.days < 0;
+    const isTd = it.kind !== 'countup' && it.days === 0;
+    const catLbl = it.kind === 'countup' ? '正数日' : (CD_CAT_NAME[it.category] || '日子');
+    const rLbl = it.kind === 'countup' ? (it.days >= 0 ? '已经' : '还有') : (isTd ? '' : (isPast ? '已过' : '还有'));
+    const rNum = isTd ? '<b class="txt">今天</b>' : `<b class="num">${Math.abs(it.days)}<i>天</i></b>`;
+    const subTxt = it.kind === 'countup' ? `${cdDateText(it.target_date)} 起`
+      : (it.kind === 'yearly_lunar' ? `每年${(it.lunar_str || '').replace(/^农历/, '')} · ${cdDateText(it.target_date, false, true)}`
+        : (it.kind === 'yearly_solar' ? `每年 · ${cdDateText(it.target_date)}` : cdDateText(it.target_date)));
+    return `<button class="cp-item${it.id === cdSelId ? ' sel' : ''}${isPast ? ' past' : ''}${isTd ? ' is-today' : ''}" data-id="${esc(it.id)}" data-cat="${esc(it.category || 'life')}" type="button">
+      <div class="cp-i-l">
+        <div class="cp-i-top"><i class="cp-i-dot"></i><span>${esc(catLbl)}</span>${it.anniv_label ? `<em>${esc(it.anniv_label)}</em>` : ''}${it.pinned ? '<span class="cp-i-pin">置顶</span>' : ''}</div>
+        <div class="cp-i-title">${esc(it.title)}</div>
+        <div class="cp-i-sub">${esc(subTxt)}</div>
+      </div>
+      <div class="cp-i-r">${rLbl ? `<small>${rLbl}</small>` : ''}${rNum}</div>
+    </button>`;
+  }).join('');
+}
+
+$('cpList').onclick = e => {
+  const b = e.target.closest('.cp-item[data-id]');
+  if (!b) return;
+  cdSelId = b.dataset.id;
+  cdDelConfirmId = '';
+  renderCountdownPage();
+};
+
+async function toggleCdPin(item) {
+  try {
+    const j = await api('/api/home/countdowns/pin', { id: item.id, pinned: !item.pinned });
+    if (j && j.ok) {
+      toast(j.item && j.item.pinned ? '已置顶到屏幕主页' : '已取消主页置顶');
+      invalidateStateEtag();
+      calCache.clear(); calPanels().forEach(p => { p.dataset.k = ''; p.dataset.ok = ''; }); calFillAll();
+      await loadCountdowns(true);
+      poll();
+    }
+  } catch (err) { toast(err.message || '操作失败'); }
+}
+
+async function handleCdDelete(item) {
+  if (cdDelConfirmId !== item.id) {
+    cdDelConfirmId = item.id;
+    clearTimeout(cdDelTimer);
+    cdDelTimer = setTimeout(() => { if (cdDelConfirmId === item.id) { cdDelConfirmId = ''; if (cpOpen()) renderCountdownPage(); } }, 3500);
+    renderCountdownPage();
+    return;
+  }
+  cdDelConfirmId = '';
+  clearTimeout(cdDelTimer);
+  try {
+    const j = await api('/api/home/countdowns/delete', { id: item.id });
+    if (j && j.ok) {
+      toast(`已删除「${item.title}」`);
+      invalidateStateEtag();
+      calCache.clear(); calPanels().forEach(p => { p.dataset.k = ''; p.dataset.ok = ''; }); calFillAll();
+      await loadCountdowns(true);
+      poll();
+    }
+  } catch (err) { toast(err.message || '删除失败'); }
+}
+
+/* Supercharged Touch Create / Edit Modal: hold-to-repeat steppers + in-place quick grid + relative jumps */
+function openCdEditModal(item = null, prefillIso = '') {
+  const now = new Date();
+  const todayIso = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const isRealEdit = !!(item && item.id && !item._preset);
+  let mode = 'once';      // 'once' | 'yearly' | 'countup'
+  let cal = 'solar';      // 'solar' | 'lunar'
+  const defOnce = new Date(now.getTime() + 30 * 86400000);
+  let y = defOnce.getFullYear(), m = defOnce.getMonth() + 1, d = defOnce.getDate(), leap = false;
+  let useStartYear = false;
+  let cat = (item && item.category) || 'exam';
+  let pinned = !!(item && item.pinned);
+  let title = (item && item.title) || '';
+  let gridKind = '';      // '' | 'y' | 'm' | 'd'
+
+  if (prefillIso && /^(\d{4})-(\d{2})-(\d{2})$/.test(prefillIso)) {
+    const pm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(prefillIso);
+    y = +pm[1]; m = +pm[2]; d = +pm[3];
+    if (prefillIso < todayIso) { mode = 'countup'; cat = 'life'; }
+  } else if (item) {
+    if (item.kind === 'yearly_lunar') {
+      mode = 'yearly'; cal = 'lunar';
+      y = now.getFullYear(); m = now.getMonth() + 1; d = now.getDate();
+      if (!item._preset) { m = item.lunar_month || m; d = item.lunar_day || d; leap = !!item.lunar_leap; }
+      if (item.start_year) { y = item.start_year; useStartYear = true; }
+    } else if (item.kind === 'yearly_solar') {
+      mode = 'yearly'; cal = 'solar';
+      y = now.getFullYear(); m = now.getMonth() + 1; d = now.getDate();
+      if (!item._preset) { m = item.month || m; d = item.day || d; }
+      if (item.start_year) { y = item.start_year; useStartYear = true; }
+    } else if (item.kind === 'countup') {
+      mode = 'countup'; cal = 'solar';
+      y = now.getFullYear(); m = now.getMonth() + 1; d = now.getDate();
+      if (item.date && /^(\d{4})-(\d{2})-(\d{2})$/.test(item.date)) {
+        const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.date);
+        y = +dm[1]; m = +dm[2]; d = +dm[3];
+      }
+    } else {
+      mode = 'once'; cal = 'solar';
+      if (item.date && /^(\d{4})-(\d{2})-(\d{2})$/.test(item.date)) {
+        const dm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(item.date);
+        y = +dm[1]; m = +dm[2]; d = +dm[3];
+      }
+    }
+  }
+
+  const whoChips = getCdWhoChips();
+  let conv = null, convSeq = 0, saving = false, holdDelayT = 0, holdRepT = 0;
+  function stopHold() { clearTimeout(holdDelayT); clearInterval(holdRepT); holdDelayT = 0; holdRepT = 0; }
+
+  openModal(`
+    <h3><span>${isRealEdit ? '编辑倒数日' : '新建倒数日'}</span>${closeBtn}</h3>
+    <div class="cde-row">
+      <input class="cde-inp" id="cdeTitle" type="text" maxlength="24" placeholder="点下面的词组合出名称，也可以直接输入" value="${esc(title)}">
+      <button class="cde-clr" id="cdeClear" type="button">清空</button>
+    </div>
+    <div class="cde-qbox">
+      <div class="cde-qline" id="cdeWhoRow"><span>家人</span>${whoChips.map(w => `<button class="cde-q" data-who="${esc(w)}" type="button">${esc(w)}</button>`).join('')}</div>
+      <div class="cde-qline" id="cdeEvtRow"><span>事项</span>${CD_EVT_CHIPS.map((x, idx) => `<button class="cde-q" data-eidx="${idx}" type="button">${esc(x.t)}</button>`).join('')}</div>
+    </div>
+    <div class="cde-bar">
+      <div class="cde-seg" id="cdeModeSeg">
+        <button data-mode="once" type="button">单次倒数</button>
+        <button data-mode="yearly" type="button">每年重复</button>
+        <button data-mode="countup" type="button">正数日（已经多少天）</button>
+      </div>
+      <div class="cde-seg" id="cdeCalSeg">
+        <button data-cal="solar" type="button">公历</button>
+        <button data-cal="lunar" type="button">农历</button>
+      </div>
+    </div>
+    <div class="cde-pick-wrap">
+      <div class="cde-pick" id="cdePickCols">
+        <div class="cde-col">
+          <button class="cde-step" id="cdeYm" type="button" aria-label="减一年">−</button>
+          <div class="cde-val" id="cdeYBox"><b class="num" id="cdeYVal"></b><small id="cdeYSub"></small><button class="cde-subbtn" id="cdeYTog" type="button" style="display:none"></button></div>
+          <button class="cde-step" id="cdeYp" type="button" aria-label="加一年">+</button>
+        </div>
+        <div class="cde-col">
+          <button class="cde-step" id="cdeMm" type="button" aria-label="上一月">−</button>
+          <div class="cde-val" id="cdeMBox"><b id="cdeMVal"></b><small id="cdeMSub"></small><button class="cde-subbtn" id="cdeLeapTog" type="button" style="display:none">闰月</button></div>
+          <button class="cde-step" id="cdeMp" type="button" aria-label="下一月">+</button>
+        </div>
+        <div class="cde-col">
+          <button class="cde-step" id="cdeDm" type="button" aria-label="上一日">−</button>
+          <div class="cde-val" id="cdeDBox"><b id="cdeDVal"></b><small id="cdeDSub"></small></div>
+          <button class="cde-step" id="cdeDp" type="button" aria-label="下一日">+</button>
+        </div>
+      </div>
+      <div class="cde-grid-pane" id="cdeGridPane">
+        <div class="cde-grid" id="cdeGrid"></div>
+        <button class="cde-gback" id="cdeGridBack" type="button">返回</button>
+      </div>
+    </div>
+    <div class="cde-prev" id="cdePrev"><span class="cde-prev-l" id="cdePrevL">正在换算公农历日期…</span><div class="cde-prev-r" id="cdePrevR"></div></div>
+    <div class="cde-foot">
+      <div class="cde-cats" id="cdeCats">
+        ${Object.entries(CD_CAT_NAME).map(([k, v]) => `<button class="cde-cat" data-cat="${k}" type="button">${v}</button>`).join('')}
+      </div>
+      <div class="cde-pin-wrap" id="cdePinWrap"><span>置顶到屏幕主页</span><div class="switch${pinned ? ' on' : ''}" id="cdePinSw"></div></div>
+    </div>
+    <div class="m-actions">
+      <button class="btn" id="cdeCancel" type="button">取消</button>
+      <button class="btn primary" id="cdeSave" type="button">${isRealEdit ? '保存修改' : '添加倒数日'}</button>
+    </div>
+  `, false, mEl => {
+    mEl.classList.add('cd-edit');
+    onModalCloseHook = stopHold;
+  });
+
+  const inp = $('cdeTitle');
+  $('cdeClear').onclick = () => { inp.value = ''; inp.focus(); };
+  $('cdeCancel').onclick = closeModal;
+  $('cdePinWrap').onclick = () => { pinned = !pinned; $('cdePinSw').classList.toggle('on', pinned); };
+
+  $('cdeWhoRow').onclick = e => {
+    const b = e.target.closest('[data-who]');
+    if (!b) return;
+    const w = b.dataset.who;
+    let cur = inp.value.trim();
+    const lead = whoChips.find(p => cur.startsWith(p));
+    if (lead) cur = w + cur.slice(lead.length);
+    else cur = w + cur;
+    inp.value = cur.slice(0, 24);
+  };
+  $('cdeEvtRow').onclick = e => {
+    const b = e.target.closest('[data-eidx]');
+    if (!b) return;
+    const spec = CD_EVT_CHIPS[+b.dataset.eidx];
+    if (!spec) return;
+    let cur = inp.value.trim();
+    const lead = whoChips.find(p => cur.startsWith(p)) || '';
+    inp.value = ((lead ? lead : '') + spec.t).slice(0, 24);
+    mode = spec.mode;
+    cat = spec.cat;
+    if (spec.smart) {
+      const sm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(smartExamDate(spec.smart));
+      if (sm) { cal = 'solar'; y = +sm[1]; m = +sm[2]; d = +sm[3]; leap = false; refreshEditorUi(); return; }
+    }
+    if (spec.mode === 'countup') {
+      cal = 'solar'; y = now.getFullYear(); m = now.getMonth() + 1; d = now.getDate(); leap = false;
+      refreshEditorUi();
+      return;
+    }
+    if (cal !== spec.cal) switchCalendar(spec.cal);
+    else refreshEditorUi();
+  };
+
+  $('cdeModeSeg').onclick = e => {
+    const b = e.target.closest('[data-mode]');
+    if (!b || b.dataset.mode === mode) return;
+    mode = b.dataset.mode;
+    gridKind = '';
+    if (mode !== 'yearly') useStartYear = false;
+    if (mode === 'countup' && !isRealEdit && cal === 'solar') {
+      y = now.getFullYear(); m = now.getMonth() + 1; d = now.getDate();
+    }
+    refreshEditorUi();
+  };
+  $('cdeCalSeg').onclick = e => {
+    const b = e.target.closest('[data-cal]');
+    if (!b || b.dataset.cal === cal) return;
+    gridKind = '';
+    switchCalendar(b.dataset.cal);
+  };
+  $('cdeCats').onclick = e => {
+    const b = e.target.closest('[data-cat]');
+    if (!b) return;
+    cat = b.dataset.cat;
+    refreshEditorUi();
+  };
+
+  function switchCalendar(nextCal) {
+    if (conv) {
+      if (nextCal === 'lunar') {
+        y = conv.lunar_y || y; m = conv.lunar_m || m; d = conv.lunar_d || d; leap = !!conv.lunar_leap;
+      } else {
+        y = conv.solar_y || y; m = conv.solar_m || m; d = conv.solar_d || d; leap = false;
+      }
+    }
+    cal = nextCal;
+    refreshEditorUi();
+  }
+
+  $('cdeYTog').onclick = e => {
+    e.stopPropagation();
+    useStartYear = !useStartYear;
+    if (useStartYear && y > now.getFullYear()) y = now.getFullYear() - 10;
+    refreshEditorUi();
+  };
+  $('cdeLeapTog').onclick = e => {
+    e.stopPropagation();
+    leap = !leap;
+    refreshEditorUi();
+  };
+
+  function bindHoldStep(btnEl, stepFn) {
+    let ticks = 0;
+    btnEl.addEventListener('pointerdown', e => {
+      if (btnEl.disabled || (e.pointerType === 'mouse' && e.button !== 0)) return;
+      e.preventDefault();
+      stopHold();
+      ticks = 0;
+      stepFn(1);
+      holdDelayT = setTimeout(() => {
+        holdRepT = setInterval(() => {
+          if (!btnEl.isConnected || btnEl.disabled) { stopHold(); return; }
+          ticks++;
+          stepFn(ticks > 10 ? 2 : 1);
+        }, 90);
+      }, 320);
+    });
+    for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) {
+      btnEl.addEventListener(ev, stopHold);
+    }
+  }
+
+  bindHoldStep($('cdeYm'), mult => { y = Math.max(1920, y - (mult > 1 ? 5 : 1)); refreshEditorUi(); });
+  bindHoldStep($('cdeYp'), mult => { y = Math.min(2099, y + (mult > 1 ? 5 : 1)); refreshEditorUi(); });
+  bindHoldStep($('cdeMm'), () => { m = m <= 1 ? 12 : m - 1; leap = false; refreshEditorUi(); });
+  bindHoldStep($('cdeMp'), () => { m = m >= 12 ? 1 : m + 1; leap = false; refreshEditorUi(); });
+  bindHoldStep($('cdeDm'), mult => { const mx = (conv && conv.max_days) || 30; const stp = mult > 1 ? 2 : 1; d = d - stp < 1 ? mx : d - stp; refreshEditorUi(); });
+  bindHoldStep($('cdeDp'), mult => { const mx = (conv && conv.max_days) || 30; const stp = mult > 1 ? 2 : 1; d = d + stp > mx ? 1 : d + stp; refreshEditorUi(); });
+
+  function showQuickGrid(kind) {
+    if (kind === 'y' && mode === 'yearly' && !useStartYear) {
+      useStartYear = true;
+      if (y > now.getFullYear()) y = now.getFullYear() - 10;
+    }
+    gridKind = kind;
+    const g = $('cdeGrid');
+    g.classList.toggle('days', kind === 'd');
+    if (kind === 'm') {
+      g.innerHTML = Array.from({ length: 12 }, (_, i) => {
+        const mv = i + 1;
+        const lbl = cal === 'lunar' ? CD_LUNAR_M[mv] : `${mv}月`;
+        return `<button class="cde-gbtn${mv === m ? ' on' : ''}" data-gv="${mv}" type="button">${lbl}</button>`;
+      }).join('');
+    } else if (kind === 'd') {
+      const mx = (conv && conv.max_days) || (cal === 'lunar' ? 30 : 31);
+      g.innerHTML = Array.from({ length: mx }, (_, i) => {
+        const dv = i + 1;
+        const lbl = cal === 'lunar' ? CD_LUNAR_D[dv] : `${dv}`;
+        return `<button class="cde-gbtn${dv === d ? ' on' : ''}" data-gv="${dv}" type="button">${lbl}</button>`;
+      }).join('');
+    } else {
+      const cy = now.getFullYear();
+      const uniq = [];
+      if (mode === 'once') { for (let v = Math.min(cy, y); uniq.length < 12 && v <= 2099; v++) uniq.push(v); }
+      else { for (let v = cy; v >= (mode === 'countup' ? Math.min(cy - 29, y) : 1930); v--) uniq.push(v); }
+      g.innerHTML = uniq.map(yv => `<button class="cde-gbtn${yv === y ? ' on' : ''}" data-gv="${yv}" type="button">${yv}年</button>`).join('');
+    }
+    g.classList.toggle('years', kind === 'y' && mode !== 'once');
+    setDisp($('cdePickCols'), 'none');
+    setDisp($('cdeGridPane'), 'flex');
+    g.scrollTop = 0;
+    const onBtn = g.querySelector('.cde-gbtn.on');
+    if (onBtn && g.scrollHeight > g.clientHeight) g.scrollTop = Math.max(0, onBtn.offsetTop - g.offsetTop - 57);
+  }
+
+  $('cdeYBox').onclick = e => { if (!e.target.closest('button')) showQuickGrid('y'); };
+  $('cdeMBox').onclick = e => { if (!e.target.closest('button')) showQuickGrid('m'); };
+  $('cdeDBox').onclick = e => { if (!e.target.closest('button')) showQuickGrid('d'); };
+  $('cdeGridBack').onclick = () => { gridKind = ''; setDisp($('cdeGridPane'), 'none'); setDisp($('cdePickCols'), 'grid'); };
+  $('cdeGrid').onclick = e => {
+    const b = e.target.closest('[data-gv]');
+    if (!b) return;
+    const val = +b.dataset.gv;
+    if (gridKind === 'y') y = val;
+    else if (gridKind === 'm') { m = val; leap = false; }
+    else if (gridKind === 'd') d = val;
+    gridKind = '';
+    setDisp($('cdeGridPane'), 'none');
+    setDisp($('cdePickCols'), 'grid');
+    refreshEditorUi();
+  };
+
+  $('cdePrevR').onclick = e => {
+    const b = e.target.closest('[data-rel]');
+    if (!b) return;
+    const off = +b.dataset.rel;
+    const tgt = new Date(now.getFullYear(), now.getMonth(), now.getDate() + off);
+    cal = 'solar'; leap = false;
+    y = tgt.getFullYear(); m = tgt.getMonth() + 1; d = tgt.getDate();
+    refreshEditorUi();
+  };
+
+  function syncCatBtns() {
+    $('cdeCats').querySelectorAll('[data-cat]').forEach(el => el.classList.toggle('on', el.dataset.cat === cat));
+  }
+
+  async function refreshEditorUi() {
+    $('cdeModeSeg').querySelectorAll('[data-mode]').forEach(el => el.classList.toggle('on', el.dataset.mode === mode));
+    $('cdeCalSeg').querySelectorAll('[data-cal]').forEach(el => el.classList.toggle('on', el.dataset.cal === cal));
+    syncCatBtns();
+    if (!gridKind) {
+      setDisp($('cdeGridPane'), 'none');
+      setDisp($('cdePickCols'), 'grid');
+    }
+
+    const yTog = $('cdeYTog');
+    if (mode === 'yearly') {
+      setDisp(yTog, 'inline-block');
+      yTog.classList.toggle('on', useStartYear);
+      const ageWord = cat === 'birthday' ? '周岁' : '周年';
+      yTog.textContent = useStartYear ? `不算${ageWord}` : (cat === 'birthday' ? '选出生年 · 算周岁' : '选起始年 · 算周年');
+      $('cdeYm').disabled = !useStartYear;
+      $('cdeYp').disabled = !useStartYear;
+      setText($('cdeYVal'), useStartYear ? `${y}年` : '每年');
+      setText($('cdeYSub'), useStartYear ? (cat === 'birthday' ? '出生年' : '起始年') : '');
+    } else {
+      setDisp(yTog, 'none');
+      $('cdeYm').disabled = false;
+      $('cdeYp').disabled = false;
+      setText($('cdeYVal'), `${y}年`);
+      setText($('cdeYSub'), mode === 'countup' ? '从这天算起' : '');
+    }
+
+    setText($('cdeMVal'), cal === 'lunar' ? `${leap ? '闰' : ''}${CD_LUNAR_M[m] || m + '月'}` : `${pad(m)}月`);
+    setText($('cdeMSub'), cal === 'lunar' ? '农历月' : '');
+    setText($('cdeDVal'), cal === 'lunar' ? (CD_LUNAR_D[d] || d + '日') : `${pad(d)}日`);
+    setText($('cdeDSub'), cal === 'lunar' ? '农历日' : '');
+
+    const mySeq = ++convSeq;
+    const qYear = (mode === 'yearly' && !useStartYear) ? now.getFullYear() : y;
+    try {
+      const res = await api(`/api/home/countdowns/convert?cal=${cal}&y=${qYear}&m=${m}&d=${d}&leap=${leap ? 1 : 0}`);
+      if (mySeq !== convSeq || !$('cdePrevL')) return;
+      if (res && res.ok) {
+        conv = res;
+        if (cal === 'lunar') {
+          d = res.lunar_d;
+          leap = !!res.lunar_leap;
+          const canLeap = res.leap_month_in_year === m && (mode !== 'yearly' || useStartYear);
+          const lt = $('cdeLeapTog');
+          setDisp(lt, (res.leap_month_in_year === m || mode === 'yearly') ? 'inline-block' : 'none');
+          lt.classList.toggle('on', leap);
+          lt.textContent = leap ? '已选闰月' : (canLeap ? '切为闰月' : '闰月生日');
+          setText($('cdeMVal'), `${leap ? '闰' : ''}${CD_LUNAR_M[m]}`);
+          setText($('cdeDVal'), CD_LUNAR_D[d] || `${d}日`);
+        } else {
+          d = res.solar_d;
+          setDisp($('cdeLeapTog'), 'none');
+          setText($('cdeDVal'), `${pad(d)}日`);
+        }
+        const pL = $('cdePrevL'), pR = $('cdePrevR');
+        if (mode === 'yearly') {
+          const nd = res.next_yearly_days;
+          const agePart = (useStartYear && qYear < now.getFullYear() + 1) ? (() => {
+            const occY = Number(res.next_yearly_occ_year) || +(res.next_yearly_solar || '').slice(0, 4) || now.getFullYear();
+            return occY > y ? ` · 满 ${occY - y}${cat === 'birthday' ? '周岁' : '周年'}` : '';
+          })() : '';
+          pL.innerHTML = `下一次：<strong>${esc(cdDateText(res.next_yearly_solar, true))}</strong>${res.lunar_label ? ' · ' + esc(res.lunar_label) : ''}${esc(agePart)}`;
+          pR.innerHTML = `<b>${nd === 0 ? '就是今天' : `还有 ${nd} 天`}</b>`;
+        } else if (mode === 'countup') {
+          const elDays = -res.days_from_today;
+          pL.innerHTML = `开始：<strong>${esc(cdDateText(res.solar, true))}</strong> · ${esc(res.lunar_label || '')}`;
+          pR.innerHTML = `<button class="cde-rel" data-rel="0" type="button">今天</button><button class="cde-rel" data-rel="-7" type="button">7天前</button><button class="cde-rel" data-rel="-30" type="button">30天前</button><b>${elDays >= 0 ? `已经 ${elDays} 天` : `${Math.abs(elDays)} 天后开始`}</b>`;
+        } else {
+          const rem = res.days_from_today;
+          pL.innerHTML = `日期：<strong>${esc(cdDateText(res.solar, true))}</strong> · ${esc(res.lunar_label || '')}`;
+          pR.innerHTML = `<button class="cde-rel" data-rel="7" type="button">+7天</button><button class="cde-rel" data-rel="30" type="button">+30天</button><button class="cde-rel" data-rel="100" type="button">+100天</button><b>${rem === 0 ? '就是今天' : (rem > 0 ? `还有 ${rem} 天` : `已过 ${Math.abs(rem)} 天`)}</b>`;
+        }
+      }
+    } catch (err) {}
+  }
+
+  $('cdeSave').onclick = async () => {
+    if (saving) return;
+    const tVal = inp.value.trim();
+    if (!tVal) { toast('先起个名字：点上面的词，或直接输入'); return; }
+    let payload = {
+      title: tVal,
+      category: cat,
+      pinned
+    };
+    if (isRealEdit) payload.id = item.id;
+    const whoHit = whoChips.find(p => tVal.startsWith(p));
+    if (whoHit) payload.who = whoHit;
+
+    if (mode === 'yearly') {
+      if (cal === 'lunar') {
+        payload.kind = 'yearly_lunar';
+        payload.lunar_month = m;
+        payload.lunar_day = d;
+        payload.lunar_leap = leap;
+      } else {
+        payload.kind = 'yearly_solar';
+        payload.month = m;
+        payload.day = d;
+      }
+      if (useStartYear) payload.start_year = y;
+    } else {
+      payload.kind = mode;
+      const iso = (cal === 'lunar' && conv && conv.solar) ? conv.solar : `${y}-${pad(m)}-${pad(d)}`;
+      payload.date = iso;
+    }
+
+    saving = true;
+    $('cdeSave').disabled = true;
+    try {
+      const j = await api('/api/home/countdowns', payload);
+      if (j && j.ok) {
+        cdSelId = j.item ? j.item.id : cdSelId;
+        closeModal();
+        toast(isRealEdit ? '倒数日已更新' : `已添加「${tVal}」`);
+        invalidateStateEtag();
+        calCache.clear(); calPanels().forEach(p => { p.dataset.k = ''; p.dataset.ok = ''; }); calFillAll();
+        await loadCountdowns(true);
+        poll();
+      }
+    } catch (err) {
+      toast(err.message || '保存失败');
+    } finally {
+      saving = false;
+      if ($('cdeSave')) $('cdeSave').disabled = false;
+    }
+  };
+
+  refreshEditorUi();
+}
 
 playEnter('enter');
 document.body.classList.toggle('paused', !visible);

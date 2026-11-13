@@ -20,6 +20,8 @@
 		<string>0.24</string>
 		<key>TRANSLATION_ASR_MODEL_DIR</key>
 		<string>/Users/YOUR_USERNAME/thinksmart-view/mac-companion/voice-server/models/Qwen3-ASR-1.7B-8bit</string>
+		<key>TTS_IDLE_SLEEP_SECONDS</key>
+		<string>600</string>
 		<key>TTS_MODEL_DIR</key>
 		<string>/Users/YOUR_USERNAME/thinksmart-view/mac-companion/voice-server/models/Qwen3-TTS-12Hz-1.7B-Base-8bit</string>
 		<key>TTS_SPEEDUPS</key>

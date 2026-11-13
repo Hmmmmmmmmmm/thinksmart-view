@@ -4,6 +4,7 @@
 -- HD A2DP codecs (AAC bitratemode=5, LDAC HQ, aptX HD, SBC-XQ) and 256-tap sinc resampling (quality=10).
 bluez_monitor.properties["bluez5.roles"] = "[ a2dp_sink ]"
 bluez_monitor.properties["bluez5.hfphsp-backend"] = "none"
+bluez_monitor.properties["bluez5.headset-roles"] = "[ ]"
 bluez_monitor.properties["bluez5.codecs"] = "[ aac ldac aptx_hd aptx sbc_xq sbc ]"
 bluez_monitor.properties["bluez5.enable-sbc-xq"] = true
 bluez_monitor.properties["bluez5.enable-hw-volume"] = true

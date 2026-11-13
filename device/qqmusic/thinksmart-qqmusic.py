@@ -236,10 +236,20 @@ def _sunrise_mark_stopped():
 
 
 def _write_runtime_json(path: Path, data: dict):
-    tmp = path.with_name('.' + path.name + '.tmp')
-    tmp.write_text(json.dumps(data), encoding='utf-8')
-    os.chmod(tmp, 0o644)
-    os.replace(tmp, path)
+    if path.is_symlink():
+        raise OSError(f'Refusing symlink runtime path: {path}')
+    tmp = path.with_name(f'.{path.name}.{os.getpid()}.{threading.get_ident()}.tmp')
+    try:
+        fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0), 0o644)
+        with os.fdopen(fd, 'w', encoding='utf-8') as f:
+            os.fchmod(f.fileno(), 0o644)
+            json.dump(data, f)
+        if path.is_symlink():
+            raise OSError(f'Refusing symlink runtime path: {path}')
+        os.replace(tmp, path)
+    except BaseException:
+        tmp.unlink(missing_ok=True)
+        raise
 
 
 def _read_sleep_state() -> dict:
@@ -1914,6 +1924,7 @@ def qq_user_playlists() -> list:
 
 # ---- 2026-11-12 (Claude): 我喜欢 (dirid 201) for the playing song ----------------------------------------------------
 _SONG_ID_CACHE = {}   # mid -> (numeric song id, song type); playlist writes take the numeric id
+_SONG_ID_LOCK = threading.Lock()
 
 
 def _qq_client_comm(cfg: dict = None) -> dict:
@@ -1936,7 +1947,8 @@ def _qq_musicu_one(comm: dict, req: dict, timeout: float = 8) -> tuple:
 
 def qq_song_id(mid: str) -> tuple:
     """(numeric id, type) of a QQ song, or (None, None)."""
-    hit = _SONG_ID_CACHE.get(mid)
+    with _SONG_ID_LOCK:
+        hit = _SONG_ID_CACHE.get(mid)
     if hit:
         return hit
     try:
@@ -1950,9 +1962,10 @@ def qq_song_id(mid: str) -> tuple:
     if code != 0 or type(sid) is not int or sid <= 0:
         return None, None
     res = (sid, stype if type(stype) is int else 0)
-    if len(_SONG_ID_CACHE) > 500:
-        _SONG_ID_CACHE.clear()
-    _SONG_ID_CACHE[mid] = res
+    with _SONG_ID_LOCK:
+        if len(_SONG_ID_CACHE) > 500:
+            _SONG_ID_CACHE.clear()
+        _SONG_ID_CACHE[mid] = res
     return res
 
 
@@ -4853,6 +4866,7 @@ async def watch_xiaozhi_events():
     timeout = aiohttp.ClientTimeout(total=None, sock_connect=5, sock_read=35)
     last_err_log = 0.0
     async with aiohttp.ClientSession(timeout=timeout, trust_env=False, read_bufsize=2 * 1024 * 1024) as sess:
+        sse_err_streak = 0
         while True:
             try:
                 async with sess.get('http://127.0.0.1:8090/events') as resp:
@@ -4873,6 +4887,7 @@ async def watch_xiaozhi_events():
                                 continue
                             if not isinstance(data, dict):
                                 continue
+                            sse_err_streak = 0
 
                             if event_type == 'volume' and data.get('volume') is not None and not data.get('ring') and not isinstance(data.get('volume'), bool):
                                 try:
@@ -4932,10 +4947,14 @@ async def watch_xiaozhi_events():
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
+                sse_err_streak += 1
                 now_m = time.monotonic()
                 if now_m - last_err_log >= 60.0:
                     last_err_log = now_m
-                    log.warning('XiaoZhi SSE watcher reconnecting (%s)', type(exc).__name__)
+                    if sse_err_streak < 3 and isinstance(exc, (EOFError, aiohttp.ClientPayloadError, aiohttp.ClientConnectionError)):
+                        log.info('XiaoZhi SSE watcher reconnecting (%s)', type(exc).__name__)
+                    else:
+                        log.warning('XiaoZhi SSE watcher reconnecting (%s)', type(exc).__name__)
                 voice_busy = False
                 alarm_ringing = False
                 prev_bt = None

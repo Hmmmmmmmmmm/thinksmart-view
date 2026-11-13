@@ -22,6 +22,7 @@ import logging
 import os
 from pathlib import Path
 
+from contextlib import asynccontextmanager
 import httpx
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
@@ -42,9 +43,22 @@ ALLOWED = (
 )
 HOP_HEADERS = {"host", "content-length", "connection", "keep-alive", "transfer-encoding", "authorization"}
 
+MAX_BODY_BYTES = 16 * 1024 * 1024
 logger = logging.getLogger("xiaozhi-gateway")
-app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
 client = httpx.AsyncClient(timeout=httpx.Timeout(120.0, connect=3.0))
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    try:
+        yield
+    finally:
+        await client.aclose()
+
+
+app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None, lifespan=lifespan)
 
 
 def _allowed(method: str, path: str) -> bool:
@@ -66,10 +80,26 @@ async def relay(token: str, path: str, request: Request):
         logger.warning("rejected %s /%s from %s (not a model route)", request.method, path, client_ip)
         return JSONResponse({"error": "not found"}, status_code=404)
 
+    cl_hdr = request.headers.get("content-length")
+    if cl_hdr:
+        try:
+            if int(cl_hdr) > MAX_BODY_BYTES:
+                return JSONResponse({"detail": "Payload too large"}, status_code=413)
+        except ValueError:
+            pass
+    chunks = []
+    total_bytes = 0
+    async for chunk in request.stream():
+        total_bytes += len(chunk)
+        if total_bytes > MAX_BODY_BYTES:
+            return JSONResponse({"detail": "Payload too large"}, status_code=413)
+        chunks.append(chunk)
+    body_bytes = b"".join(chunks)
+
     headers = {k: v for k, v in request.headers.items() if k.lower() not in HOP_HEADERS}
     base = STUDY_UPSTREAM if path == "study/v1" else UPSTREAM
     upstream = client.build_request(request.method, f"{base}/{path}", params=request.query_params,
-                                    headers=headers, content=await request.body())
+                                    headers=headers, content=body_bytes)
     try:
         resp = await client.send(upstream, stream=True)
     except httpx.HTTPError as exc:
@@ -100,4 +130,6 @@ if __name__ == "__main__":
     import uvicorn
 
     logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+    logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     uvicorn.run(app, host="0.0.0.0", port=int(CONFIG.get("port", 8080)), log_level="warning")

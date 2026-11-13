@@ -73,7 +73,7 @@
   #tsHomeBtn{height:56px;padding:0 22px;border-radius:18px;font-size:20px}
   #tsHomeBtn:active,#tsBrightness:active{background:#263d5b;transform:scale(.95);transition:transform .05s ease-out,background-color .05s ease}#tsHomeBtn svg,#tsBrightness svg{width:22px;height:22px;color:#81cefc;flex-shrink:0}#tsHomeBtn svg{width:24px;height:24px}
   #tsHomeBtn.fixed{position:fixed;top:20px;right:24px;z-index:15}
-  #tsVoicePill{position:fixed;top:14px;left:50%;z-index:9450;transform:translate3d(-50%,-14px,0);display:flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:999px;border:1px solid rgba(129,206,252,.38);background:rgba(16,26,43,.92);color:#eef5ff;font:700 18px -apple-system,BlinkMacSystemFont,"Noto Sans CJK SC",sans-serif;box-shadow:0 10px 26px rgba(0,0,0,.35);opacity:0;visibility:hidden;pointer-events:none;cursor:pointer;touch-action:manipulation;transition:opacity .13s ease,transform .13s cubic-bezier(.22,1,.36,1),visibility 0s linear .13s}
+  #tsVoicePill{position:fixed;top:14px;left:50%;z-index:9450;transform:translate3d(-50%,-14px,0);display:flex;align-items:center;gap:10px;height:46px;padding:0 20px;border-radius:999px;border:1px solid #355075;background:#101a2b;color:#eef5ff;font:700 18px/24px -apple-system,BlinkMacSystemFont,"Noto Sans CJK SC",sans-serif;box-shadow:0 6px 16px rgba(0,0,0,.32);opacity:0;visibility:hidden;pointer-events:none;cursor:pointer;touch-action:manipulation;transition:opacity .13s ease,transform .13s cubic-bezier(.22,1,.36,1),visibility 0s linear .13s}
   #tsVoicePill.show{opacity:1;visibility:visible;pointer-events:auto;transform:translate3d(-50%,0,0);transition:opacity .13s ease,transform .13s cubic-bezier(.22,1,.36,1),visibility 0s linear 0s}
   #tsVoicePill i{width:10px;height:10px;border-radius:50%;background:#4ade80;flex-shrink:0}
   #tsVoicePill[data-st="connecting"] i{background:#7dd3fc}
@@ -119,7 +119,7 @@
   html.ts-light #tsMsgCard{background:#f6f2ea;border-color:#dab984;color:#18191b;box-shadow:0 0 0 1px #dab984,0 10px 24px rgba(28,24,18,.18)}
   html.ts-light #tsMsgCard .tm-h{color:#84510a}
   html.ts-light #tsMsgCard button{background:#a26008;color:#faf8f4}
-  html.ts-light #tsVoicePill{background:rgba(246,242,234,.95);border-color:#d6cdbf;color:#18191b;box-shadow:0 8px 20px rgba(28,24,18,.16)}
+  html.ts-light #tsVoicePill{background:#f6f2ea;border-color:#d6cdbf;color:#18191b;box-shadow:0 6px 16px rgba(28,24,18,.16)}
   html.ts-light #tsVoicePill i{background:#0f6d63}
   `;
   document.head.appendChild(style);
@@ -288,7 +288,7 @@
       if (msgAckEl.textContent !== wantAckLbl) msgAckEl.textContent = wantAckLbl;
       shownMsg = m.id; if (!card.classList.contains('show')) card.classList.add('show');
     }
-    let inboxFetching = false, inboxPending = false, inboxAckEpoch = 0, retryMsgId = null, overlayClipUntil = 0;
+    let inboxFetching = false, inboxPending = false, inboxAckEpoch = 0, retryMsgId = null, overlayClipUntil = 0, lastCdOpenSeq = null;
     stopOverlayClip = () => {
       if (Date.now() < overlayClipUntil) {
         overlayClipUntil = 0;
@@ -316,6 +316,21 @@
       try {
         const j = await inboxRequest('/api/home/inbox');
         if (myEpoch !== inboxAckEpoch || msgBusy) return;
+        const cdSeq = Number(j?.cd_open_seq) || 0;
+        if (lastCdOpenSeq === null) {
+          lastCdOpenSeq = cdSeq;
+        } else if (cdSeq > lastCdOpenSeq) {
+          lastCdOpenSeq = cdSeq;
+          if (j?.cd_open_fresh && !document.body.classList.contains('ringing')) {
+            closeBrightness(false);
+            forceCloseSheets();
+            if (subOpen) closeSub(true);
+            else { autoReturn = false; setView('home'); }
+            const sendOpenCd = () => { try { homeFrameRef?.contentWindow?.postMessage({ ts: 'home', openCountdown: true }, HOME); } catch (e) {} };
+            sendOpenCd();
+            setTimeout(sendOpenCd, 140);
+          }
+        }
         const nextTotal = Number(j?.count) || 0;
         if (nextTotal === 0 && unreadTotal === 0 && unreadCache.length === 0 && shownMsg === null) return;
         unreadCache = Array.isArray(j?.unread) ? j.unread.slice() : [];
@@ -753,8 +768,8 @@
   function scheduleVoiceSrvCheck() {
     if (document.hidden || !homeOk) return;
     clearTimeout(srvVoicePollT1); clearTimeout(srvVoicePollT2);
-    srvVoicePollT1 = setTimeout(() => pollServerBadge(true), 140);
-    srvVoicePollT2 = setTimeout(() => pollServerBadge(true), 920);
+    srvVoicePollT1 = setTimeout(() => { pollServerBadge(true); triggerInboxPoll(); }, 140);
+    srvVoicePollT2 = setTimeout(() => { pollServerBadge(true); triggerInboxPoll(); }, 920);
   }
   document.addEventListener('visibilitychange', () => { if (!document.hidden && homeOk) pollServerBadge(); });
   /* ---------------- 深色 / 浅色 (2026-11-12): picked in the brightness panel, remembered here (8090 storage),

@@ -528,6 +528,93 @@ HTML_PAGE = r"""<!DOCTYPE html>
   .msg-quick summary { padding: 8px 0; }
   .msg-quick textarea { border-radius: 14px; }
   .msg-quick button { height: 40px; border-radius: 12px; color: var(--on-fill); }
+  /* ===== 2026-11-13: 倒数日 / 生日 / 纪念日 (phone management card) ===== */
+  .cds { margin-top: 0; }
+  .cd-add-btn { height: 34px; padding: 0 13px; border-radius: 10px; border: none; background: var(--accent); color: var(--on-fill); font-size: 13px; font-weight: 700; cursor: pointer; }
+  .cd-add-btn.open { background: var(--surface-2); color: var(--muted); }
+  .cd-form { display: none; margin-top: 12px; padding: 14px; border-radius: 16px; background: var(--surface-2); flex-direction: column; gap: 10px; }
+  .cd-form.open { display: flex; }
+  .cd-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .cd-inp { flex: 1; min-width: 0; height: 42px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 15px; outline: none; }
+  .cd-inp:focus { border-color: var(--accent); }
+  .cd-qchips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .cd-qchip { height: 30px; padding: 0 10px; border-radius: 999px; border: none; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .cd-seg { display: inline-flex; padding: 3px; border-radius: 11px; background: var(--surface); gap: 3px; }
+  .cd-seg button { height: 32px; padding: 0 10px; border-radius: 8px; border: none; background: transparent; color: var(--muted); font-size: 13px; font-weight: 600; }
+  .cd-seg button.on { background: var(--acc-soft); color: var(--acc-ink); }
+  .cd-sel { height: 38px; padding: 0 10px; border-radius: 10px; border: 1px solid var(--line); background: var(--surface); color: var(--text); font-size: 14px; }
+  .cd-chk { display: inline-flex; align-items: center; gap: 6px; font-size: 13.5px; color: var(--text); cursor: pointer; }
+  .cd-chk input { width: 17px; height: 17px; accent-color: var(--accent); }
+  .cd-f-acts { display: flex; gap: 8px; justify-content: flex-end; margin-top: 2px; }
+  .cd-f-acts button { height: 38px; padding: 0 16px; border-radius: 11px; border: none; font-size: 14px; font-weight: 700; }
+  .cd-btn-cancel { background: var(--surface); color: var(--muted); }
+  .cd-btn-save { background: var(--accent); color: var(--on-fill); }
+  .cd-list { display: flex; flex-direction: column; gap: 8px; margin-top: 10px; }
+  .cd-list:empty { display: none; }
+  .cd-empty { font-size: 13.5px; color: var(--dim); padding: 8px 2px 2px; }
+  .cd-it { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 11px 13px; border-radius: 14px; background: var(--surface-2); }
+  .cd-it.past { opacity: .65; }
+  .cd-it-l { flex: 1; min-width: 0; }
+  .cd-it-t { font-size: 15px; font-weight: 700; color: var(--text); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+  .cd-tag { font-size: 11.5px; font-weight: 700; padding: 1px 7px; border-radius: 6px; background: var(--acc-soft); color: var(--acc-ink); }
+  .cd-tag.pin { background: var(--warn-soft); color: var(--warn-ink); }
+  .cd-it-sub { font-size: 12.5px; color: var(--dim); margin-top: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .cd-it-r { display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .cd-days { text-align: right; margin-right: 2px; }
+  .cd-days b { font-size: 20px; font-weight: 800; color: var(--accent); font-variant-numeric: tabular-nums; }
+  .cd-days small { display: block; font-size: 11px; color: var(--dim); }
+  .cd-ibtn { height: 32px; padding: 0 9px; border-radius: 9px; border: none; background: var(--surface); color: var(--muted); font-size: 12.5px; font-weight: 600; }
+  .cd-ibtn.on { background: var(--warn-soft); color: var(--warn-ink); }
+  .cd-ibtn.del { background: transparent; box-shadow: inset 0 0 0 1.5px var(--bad-line); color: var(--bad-ink); }
+  .cd-ibtn.del.sure { background: var(--bad-soft); }
+  /* ----- 倒数日 card polish (Claude, 2026-11-13 evening): text gets the full width, the three actions open under the row,
+     every control is finger-sized ----- */
+  #cdHint { font-size: 12.5px; color: var(--dim); margin-right: 10px; white-space: nowrap; }
+  .cd-add-btn { height: 40px; padding: 0 16px; border-radius: 12px; font-size: 14px; }
+  .cd-form { padding: 14px; gap: 12px; border: 1px solid var(--edge); }
+  .cd-form > .cd-inp { flex: none; width: 100%; height: 46px; font-size: 16px; }
+  .cd-row .cd-inp { height: 46px; font-size: 16px; }
+  .cd-qchips { gap: 8px; }
+  .cd-qchip { height: 36px; padding: 0 13px; font-size: 13.5px; font-weight: 700; color: var(--text); }
+  .cd-qchip.pre { background: var(--acc-soft); color: var(--acc-ink); }
+  .cd-seg { display: flex; width: 100%; padding: 4px; border-radius: 13px; gap: 4px; }
+  .cd-seg button { flex: 1; height: 38px; padding: 0 6px; border-radius: 10px; font-size: 14px; font-weight: 700; white-space: nowrap; }
+  .cd-seg button.on { background: var(--accent); color: var(--on-fill); }
+  .cd-sel { height: 46px; padding: 0 12px; border-radius: 12px; font-size: 15px; }
+  #cdLunarRow .cd-sel { flex: 1; min-width: 0; }
+  .cd-chk { min-height: 44px; gap: 8px; font-size: 14.5px; white-space: nowrap; }
+  .cd-chk input { width: 22px; height: 22px; }
+  .cd-prev { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 10px 12px; border-radius: 12px; background: var(--surface); font-size: 13.5px; line-height: 1.4; color: var(--muted); }
+  .cd-prev b { flex: none; color: var(--accent); font-size: 14.5px; white-space: nowrap; }
+  .cd-f-acts { gap: 10px; margin-top: 0; }
+  .cd-f-acts button { height: 46px; border-radius: 13px; font-size: 15px; }
+  .cd-btn-cancel { flex: none; padding: 0 22px; }
+  .cd-btn-save { flex: 1; }
+  .cd-empty { padding: 14px 4px 4px; font-size: 14px; line-height: 1.5; }
+  .cd-it { display: block; padding: 0; overflow: hidden; border: 1px solid var(--edge); }
+  .cd-it.past { opacity: 1; }
+  .cd-it-main { width: 100%; min-height: 64px; padding: 11px 10px 11px 14px; border: none; background: transparent; color: inherit; font: inherit; text-align: left; display: flex; align-items: center; gap: 10px; cursor: pointer; }
+  .cd-it-t { font-size: 15.5px; gap: 6px; flex-wrap: nowrap; }
+  .cd-it-t .cd-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cd-dot { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+  .cd-it[data-cat="birthday"] .cd-dot { background: var(--danger); }
+  .cd-it[data-cat="anniv"] .cd-dot { background: var(--warn); }
+  .cd-it[data-cat="life"] .cd-dot { background: var(--ok); }
+  .cd-tag { flex: none; white-space: nowrap; }
+  .cd-it-sub { font-size: 13px; margin-top: 4px; padding-left: 14px; color: var(--muted); }
+  .cd-days { flex: none; margin: 0; display: flex; align-items: baseline; gap: 4px; white-space: nowrap; }
+  .cd-days small { display: inline; font-size: 12.5px; color: var(--muted); }
+  .cd-days b { font-size: 22px; font-weight: 700; }
+  .cd-days b i { font-style: normal; font-size: 13px; margin-left: 2px; color: var(--muted); }
+  .cd-it.past .cd-name, .cd-it.past .cd-days b { color: var(--dim); }
+  .cd-it.today { background: var(--acc-soft); }
+  .cd-chev { flex: none; width: 18px; height: 18px; color: var(--dim); fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; transition: transform .15s ease; }
+  .cd-it.open .cd-chev { transform: rotate(180deg); }
+  .cd-it-acts { display: none; gap: 8px; padding: 0 12px 12px; }
+  .cd-it.open .cd-it-acts { display: flex; }
+  .cd-ibtn { flex: 1; height: 42px; padding: 0 8px; border-radius: 12px; font-size: 14px; font-weight: 700; color: var(--text); }
+  .cd-ibtn.del { flex: none; padding: 0 18px; color: var(--bad-ink); }
+  .cd-ibtn.del.sure { background: var(--danger); box-shadow: none; color: var(--on-fill); }
 </style>
 </head>
 <body>
@@ -636,6 +723,64 @@ HTML_PAGE = r"""<!DOCTYPE html>
     <textarea id="quickEdit" placeholder="一行一条，最多 8 条，每条 14 个字以内"></textarea>
     <button type="button" onclick="saveQuick()">保存</button>
   </details>
+</div>
+
+
+<div class="msgs cds" id="cdBox">
+  <div class="shots-hd"><b>倒数日 · 纪念日</b><div class="msg-hd-r"><span id="cdHint">生日 · 考试 · 正数日</span><button type="button" class="cd-add-btn" id="cdAddBtn" onclick="toggleCdForm()">＋ 添加</button></div></div>
+  <div class="cd-form" id="cdForm">
+    <input type="text" class="cd-inp" id="cdTitle" maxlength="24" placeholder="名称，如：姐姐中考、妈妈生日">
+    <div class="cd-qchips" id="cdQuickChips">
+      <button type="button" class="cd-qchip" onclick="cdPickWord('爸爸')">爸爸</button>
+      <button type="button" class="cd-qchip" onclick="cdPickWord('妈妈')">妈妈</button>
+      <button type="button" class="cd-qchip" onclick="cdPickWord('姐姐')">姐姐</button>
+      <button type="button" class="cd-qchip" onclick="cdPickWord('妹妹')">妹妹</button>
+      <button type="button" class="cd-qchip pre" onclick="cdPickPreset('生日','yearly','lunar','birthday')">生日</button>
+      <button type="button" class="cd-qchip pre" onclick="cdPickPreset('中考','once','solar','exam')">中考</button>
+      <button type="button" class="cd-qchip pre" onclick="cdPickPreset('纪念日','yearly','solar','anniv')">纪念日</button>
+      <button type="button" class="cd-qchip pre" onclick="cdPickPreset('坚持打卡','countup','solar','life')">坚持打卡</button>
+    </div>
+    <div class="cd-row">
+      <div class="cd-seg" id="cdModeSeg">
+        <button type="button" data-m="once" class="on" onclick="setCdMode('once')">单次倒数</button>
+        <button type="button" data-m="yearly" onclick="setCdMode('yearly')">每年重复</button>
+        <button type="button" data-m="countup" onclick="setCdMode('countup')">正数日</button>
+      </div>
+      <div class="cd-seg" id="cdCalSeg">
+        <button type="button" data-c="solar" class="on" onclick="setCdCal('solar')">公历</button>
+        <button type="button" data-c="lunar" onclick="setCdCal('lunar')">农历</button>
+      </div>
+    </div>
+    <div class="cd-row" id="cdSolarRow">
+      <input type="date" class="cd-inp" id="cdSolarInp" onchange="previewPhoneCd()">
+    </div>
+    <div class="cd-row" id="cdLunarRow" style="display:none">
+      <select class="cd-sel" id="cdLunarY" style="display:none" onchange="previewPhoneCd()"></select>
+      <select class="cd-sel" id="cdLunarM" onchange="previewPhoneCd()"></select>
+      <select class="cd-sel" id="cdLunarD" onchange="previewPhoneCd()"></select>
+      <label class="cd-chk"><input type="checkbox" id="cdLunarLeap" onchange="previewPhoneCd()">闰月</label>
+    </div>
+    <div class="cd-row" id="cdYearlyExtra" style="display:none">
+      <input type="number" class="cd-inp" id="cdStartYear" min="1920" max="2099" inputmode="numeric" placeholder="哪年出生或开始（选填，用来算周岁、周年）" oninput="previewPhoneCd()">
+    </div>
+    <div class="cd-prev" id="cdPrevBar"><span>选好日期后，这里显示对应的公历、农历</span><b></b></div>
+    <div class="cd-row" style="justify-content:space-between">
+      <select class="cd-sel" id="cdCatSel">
+        <option value="">分类：自动</option>
+        <option value="exam">考试日程</option>
+        <option value="birthday">生日</option>
+        <option value="anniv">纪念日</option>
+        <option value="life">生活纪念</option>
+      </select>
+      <label class="cd-chk"><input type="checkbox" id="cdPinChk">置顶到屏幕主页</label>
+    </div>
+    <div class="cd-f-acts">
+      <button type="button" class="cd-btn-cancel" onclick="toggleCdForm(false)">取消</button>
+      <button type="button" class="cd-btn-save" id="cdSaveBtn" onclick="savePhoneCd()">保存</button>
+    </div>
+  </div>
+  <div class="cd-empty" id="cdEmpty">还没有倒数日。点右上角「＋ 添加」，家里的屏幕会同步显示。</div>
+  <div class="cd-list" id="cdList"></div>
 </div>
 
 <div class="shots">
@@ -1865,6 +2010,338 @@ document.addEventListener('visibilitychange', () => {
   if (!document.hidden) { if (msgPollTimer) { clearInterval(msgPollTimer); msgPollTimer = 0; } loadMsgs(); }
   syncMsgPollTimer();
 });
+/* ---- 2026-11-13: Phone Countdown Management ---- */
+const PH_LM = ['','正月','二月','三月','四月','五月','六月','七月','八月','九月','十月','冬月','腊月'];
+const PH_LD = ['','初一','初二','初三','初四','初五','初六','初七','初八','初九','初十','十一','十二','十三','十四','十五','十六','十七','十八','十九','二十','廿一','廿二','廿三','廿四','廿五','廿六','廿七','廿八','廿九','三十'];
+let phCds = [], phCdEtag = '', phCdMode = 'once', phCdCal = 'solar', phCdEditId = '', phCdBusy = false, phCdDelId = '', phCdDelT = 0;
+let phCdOpenId = '', phCdFam = ['爸爸', '妈妈', '姐姐', '妹妹'];
+// 2027-06-20 -> 「2027年6月20日 周日」; this year's dates leave the year out (the same wording as the screen at home)
+function phCdDate(iso, long, noYear) {
+  const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso || '');
+  if (!mm) return iso || '';
+  const yy = +mm[1], mo = +mm[2], dd = +mm[3];
+  if (noYear) return `${mo}月${dd}日`;
+  const wd = '日一二三四五六'[new Date(yy, mo - 1, dd).getDay()];
+  return `${(long || yy !== new Date().getFullYear()) ? yy + '年' : ''}${mo}月${dd}日 ${long ? '星期' : '周'}${wd}`;
+}
+function togglePhoneCd(id) { phCdOpenId = phCdOpenId === id ? '' : id; phCdDelId = ''; renderPhoneCds(); }
+function renderCdFamChips() {
+  const box = $('cdQuickChips');
+  if (!box) return;
+  box.querySelectorAll('.cd-qchip:not(.pre)').forEach(el => el.remove());
+  const first = box.firstElementChild;
+  for (const w of phCdFam) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'cd-qchip'; b.textContent = w; b.onclick = () => cdPickWord(w);
+    box.insertBefore(b, first);
+  }
+}
+
+(() => {
+  const ms = $('cdLunarM'), ds = $('cdLunarD'), ys = $('cdLunarY');
+  const td = new Date();
+  if (ms && ds) {
+    ms.innerHTML = PH_LM.slice(1).map((n, i) => `<option value="${i + 1}">${n}</option>`).join('');
+    ds.innerHTML = PH_LD.slice(1).map((n, i) => `<option value="${i + 1}">${n}</option>`).join('');
+  }
+  if (ys) {
+    const yrs = [];
+    for (let yr = td.getFullYear() - 20; yr <= td.getFullYear() + 15; yr++) yrs.push(`<option value="${yr}"${yr === td.getFullYear() ? ' selected' : ''}>${yr}年</option>`);
+    ys.innerHTML = yrs.join('');
+  }
+  const defOnce = new Date(td.getTime() + 30 * 86400000);
+  const iso = `${defOnce.getFullYear()}-${String(defOnce.getMonth() + 1).padStart(2, '0')}-${String(defOnce.getDate()).padStart(2, '0')}`;
+  if ($('cdSolarInp')) $('cdSolarInp').value = iso;
+})();
+
+let phConv = null, phConvSeq = 0;
+async function previewPhoneCd() {
+  phConv = null;
+  const bar = $('cdPrevBar');
+  if (!bar || !$('cdForm').classList.contains('open')) return;
+  const now = new Date();
+  let y = now.getFullYear(), m = now.getMonth() + 1, d = now.getDate(), lp = 0;
+  const syRaw = Number($('cdStartYear').value) || 0;
+  if (phCdCal === 'lunar') {
+    y = phCdMode === 'yearly' ? (syRaw >= 1920 && syRaw <= 2099 ? syRaw : now.getFullYear()) : (Number($('cdLunarY').value) || now.getFullYear());
+    m = Number($('cdLunarM').value) || 1;
+    d = Number($('cdLunarD').value) || 1;
+    lp = $('cdLunarLeap').checked ? 1 : 0;
+  } else {
+    const sv = $('cdSolarInp').value || '';
+    const mm = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sv);
+    if (!mm) return;
+    y = +mm[1]; m = +mm[2]; d = +mm[3];
+  }
+  const seq = ++phConvSeq;
+  try {
+    const r = await fetch(`api/countdown/convert?cal=${phCdCal}&y=${y}&m=${m}&d=${d}&leap=${lp}`, { cache: 'no-store', headers: { 'X-Intercom-Msg': '1' } });
+    if (seq !== phConvSeq) return;
+    if (!r.ok) { bar.innerHTML = '<span>请选择有效日期</span>'; return; }
+    const j = await r.json();
+    if (seq !== phConvSeq) return;
+    if (!j || !j.ok) { bar.innerHTML = '<span>请选择有效日期</span>'; return; }
+    phConv = j;
+    if (phCdMode === 'yearly') {
+      const occY = Number(j.next_yearly_occ_year) || +(j.next_yearly_solar || '').slice(0, 4) || now.getFullYear();
+      const catGuess = $('cdCatSel').value || (($('cdTitle').value || '').includes('生日') ? 'birthday' : 'anniv');
+      const ageS = (syRaw >= 1920 && occY > syRaw) ? ` · 满 ${occY - syRaw}${catGuess === 'birthday' ? '周岁' : '周年'}` : '';
+      bar.innerHTML = `<span>下一次：${escHtml(phCdDate(j.next_yearly_solar, true))}${j.lunar_label ? ' · ' + escHtml(j.lunar_label) : ''}${escHtml(ageS)}</span><b>${j.next_yearly_days === 0 ? '就是今天' : '还有 ' + j.next_yearly_days + ' 天'}</b>`;
+    } else if (phCdMode === 'countup') {
+      const el = -j.days_from_today;
+      bar.innerHTML = `<span>开始：${escHtml(phCdDate(j.solar, true))} · ${escHtml(j.lunar_label || '')}</span><b>${el >= 0 ? '已经 ' + el + ' 天' : Math.abs(el) + ' 天后开始'}</b>`;
+    } else {
+      const rem = j.days_from_today;
+      bar.innerHTML = `<span>日期：${escHtml(phCdDate(j.solar, true))} · ${escHtml(j.lunar_label || '')}</span><b>${rem === 0 ? '就是今天' : (rem > 0 ? '还有 ' + rem + ' 天' : '已过 ' + Math.abs(rem) + ' 天')}</b>`;
+    }
+  } catch (e) {}
+}
+
+function syncCdFormUi() {
+  $('cdModeSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.m === phCdMode));
+  $('cdCalSeg').style.display = 'flex';
+  $('cdCalSeg').querySelectorAll('button').forEach(b => b.classList.toggle('on', b.dataset.c === phCdCal));
+  const useLunar = (phCdCal === 'lunar');
+  $('cdSolarRow').style.display = useLunar ? 'none' : 'flex';
+  $('cdLunarRow').style.display = useLunar ? 'flex' : 'none';
+  if ($('cdLunarY')) $('cdLunarY').style.display = (useLunar && phCdMode !== 'yearly') ? '' : 'none';
+  $('cdYearlyExtra').style.display = phCdMode === 'yearly' ? 'flex' : 'none';
+  $('cdSaveBtn').textContent = phCdEditId ? '保存修改' : '添加到屏幕';
+  previewPhoneCd();
+}
+function setCdMode(m) {
+  phCdMode = m;
+  if (m === 'countup' && !phCdEditId) {
+    const n = new Date();
+    $('cdSolarInp').value = `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}-${String(n.getDate()).padStart(2, '0')}`;
+  }
+  syncCdFormUi();
+}
+function setCdCal(c) {
+  if (c !== phCdCal && phConv) {
+    if (c === 'lunar' && phConv.lunar_m) {
+      $('cdLunarM').value = String(phConv.lunar_m); $('cdLunarD').value = String(phConv.lunar_d || 1);
+      $('cdLunarLeap').checked = !!phConv.lunar_leap;
+      if (phConv.lunar_y && $('cdLunarY').querySelector(`option[value="${phConv.lunar_y}"]`)) $('cdLunarY').value = String(phConv.lunar_y);
+    } else if (c === 'solar') {
+      const sol = phCdMode === 'yearly' ? (phConv.next_yearly_solar || phConv.solar) : phConv.solar;
+      if (sol) $('cdSolarInp').value = sol;
+    }
+  }
+  phCdCal = c; syncCdFormUi();
+}
+function toggleCdForm(forceOpen) {
+  const f = $('cdForm'), btn = $('cdAddBtn');
+  const open = typeof forceOpen === 'boolean' ? forceOpen : !f.classList.contains('open');
+  if (!open) { phCdEditId = ''; phConv = null; phConvSeq++; }
+  else if (!f.classList.contains('open') && !phCdEditId) {
+    $('cdTitle').value = '';
+    $('cdStartYear').value = '';
+    $('cdCatSel').value = '';
+    $('cdPinChk').checked = false;
+    $('cdLunarLeap').checked = false;
+    phCdMode = 'once'; phCdCal = 'solar';
+  }
+  f.classList.toggle('open', open);
+  btn.classList.toggle('open', open);
+  btn.textContent = open ? '收起' : '＋ 添加';
+  syncCdFormUi();
+}
+function cdPickWord(w) {
+  const inp = $('cdTitle');
+  const fam = phCdFam;
+  let v = inp.value.trim();
+  const hit = fam.find(p => v.startsWith(p));
+  inp.value = ((hit ? w + v.slice(hit.length) : w + v)).slice(0, 24);
+}
+function cdPickPreset(suf, m, c, cat) {
+  const inp = $('cdTitle');
+  const fam = phCdFam;
+  let v = inp.value.trim();
+  const hit = fam.find(p => v.startsWith(p)) || '';
+  inp.value = (hit + suf).slice(0, 24);
+  phCdMode = m;
+  $('cdCatSel').value = cat;
+  setCdCal(c);
+}
+function editPhoneCd(id) {
+  const it = phCds.find(x => x.id === id);
+  if (!it) return;
+  phCdEditId = it.id;
+  phConv = null; phConvSeq++; phCdDelId = '';
+  $('cdTitle').value = it.title || '';
+  $('cdCatSel').value = it.category || '';
+  $('cdPinChk').checked = !!it.pinned;
+  $('cdStartYear').value = it.start_year || '';
+  if (it.kind === 'yearly_lunar') {
+    phCdMode = 'yearly'; phCdCal = 'lunar';
+    $('cdLunarM').value = String(it.lunar_month || 1);
+    $('cdLunarD').value = String(it.lunar_day || 1);
+    $('cdLunarLeap').checked = !!it.lunar_leap;
+  } else if (it.kind === 'yearly_solar') {
+    phCdMode = 'yearly'; phCdCal = 'solar';
+    let yr = it.start_year || new Date().getFullYear();
+    if (Number(it.month) === 2 && Number(it.day) === 29 && !((yr % 4 === 0 && yr % 100 !== 0) || yr % 400 === 0)) yr = 2024;
+    $('cdSolarInp').value = `${yr}-${String(it.month || 1).padStart(2, '0')}-${String(it.day || 1).padStart(2, '0')}`;
+  } else {
+    phCdMode = it.kind === 'countup' ? 'countup' : 'once';
+    phCdCal = 'solar';
+    if (it.date) $('cdSolarInp').value = it.date;
+  }
+  $('cdForm').classList.add('open');
+  $('cdAddBtn').classList.add('open');
+  $('cdAddBtn').textContent = '收起';
+  syncCdFormUi();
+  try { $('cdBox').scrollIntoView({ block: 'start', behavior: 'smooth' }); } catch (e) {}
+}
+function renderPhoneCds() {
+  const box = $('cdList'), emp = $('cdEmpty'), hint = $('cdHint');
+  if (!phCds.length) {
+    box.innerHTML = '';
+    emp.style.display = 'block';
+    hint.textContent = '生日 · 考试 · 正数日';
+    return;
+  }
+  emp.style.display = 'none';
+  hint.textContent = `共 ${phCds.length} 条`;
+  box.innerHTML = phCds.map(it => {
+    const isPast = it.kind === 'once' && it.days < 0;
+    const isTd = it.kind !== 'countup' && it.days === 0;
+    const dLbl = it.kind === 'countup' ? (it.days >= 0 ? '已经' : '还有') : (isTd ? '' : (isPast ? '已过' : '还有'));
+    const dNum = isTd ? '<b>今天</b>' : `<b>${Math.abs(it.days)}<i>天</i></b>`;
+    const sub = it.kind === 'countup' ? `${phCdDate(it.target_date)} 起`
+      : (it.kind === 'yearly_lunar' ? `每年${(it.lunar_str || '').replace(/^农历/, '')} · ${phCdDate(it.target_date, false, true)}`
+        : (it.kind === 'yearly_solar' ? `每年 · ${phCdDate(it.target_date)}` : phCdDate(it.target_date)));
+    const sure = phCdDelId === it.id, open = phCdOpenId === it.id, eid = escHtml(it.id);
+    return `<div class="cd-it${isPast ? ' past' : ''}${isTd ? ' today' : ''}${open ? ' open' : ''}" data-cat="${escHtml(it.category || 'life')}">
+      <button type="button" class="cd-it-main" aria-expanded="${open}" onclick="togglePhoneCd('${eid}')">
+        <div class="cd-it-l">
+          <div class="cd-it-t"><i class="cd-dot"></i><span class="cd-name">${escHtml(it.title)}</span>${it.anniv_label ? `<span class="cd-tag">${escHtml(it.anniv_label)}</span>` : ''}${it.pinned ? '<span class="cd-tag pin">置顶</span>' : ''}</div>
+          <div class="cd-it-sub">${escHtml(sub)}</div>
+        </div>
+        <div class="cd-days">${dLbl ? `<small>${dLbl}</small>` : ''}${dNum}</div>
+        <svg class="cd-chev" viewBox="0 0 24 24"><path d="M6 9l6 6 6-6"/></svg>
+      </button>
+      <div class="cd-it-acts">
+        <button type="button" class="cd-ibtn${it.pinned ? ' on' : ''}" onclick="pinPhoneCd('${eid}',${!it.pinned})">${it.pinned ? '取消置顶' : '置顶到屏幕主页'}</button>
+        <button type="button" class="cd-ibtn" onclick="editPhoneCd('${eid}')">编辑</button>
+        <button type="button" class="cd-ibtn del${sure ? ' sure' : ''}" onclick="delPhoneCd('${eid}')">${sure ? '确认删除' : '删除'}</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function escHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+}
+async function loadCds(force = false) {
+  try {
+    const hdrs = { 'X-Intercom-Msg': '1' };
+    if (!force && phCdEtag) hdrs['If-None-Match'] = phCdEtag;
+    const r = await fetch('api/countdowns', { cache: 'no-store', headers: hdrs });
+    if (r.status === 304) return;
+    if (!r.ok) return;
+    const j = await r.json();
+    const et = r.headers.get('ETag');
+    if (et) phCdEtag = et;
+    if (j && Array.isArray(j.family) && j.family.length) {
+      const fam = j.family.filter(x => typeof x === 'string' && x).slice(0, 8);
+      if (fam.length && fam.join('|') !== phCdFam.join('|')) { phCdFam = fam; renderCdFamChips(); }
+    }
+    if (j && Array.isArray(j.items)) { phCds = j.items; renderPhoneCds(); }
+  } catch (e) {}
+}
+async function savePhoneCd() {
+  if (phCdBusy) return;
+  const title = $('cdTitle').value.trim();
+  if (!title) { toast('先起个名字'); $('cdTitle').focus(); return; }
+  const payload = { title, pinned: $('cdPinChk').checked };
+  if (phCdEditId) payload.id = phCdEditId;
+  if ($('cdCatSel').value) payload.category = $('cdCatSel').value;
+  if (phCdMode === 'yearly') {
+    const sy = $('cdStartYear').value.trim();
+    if (sy) {
+      const syn = Number(sy);
+      if (!Number.isInteger(syn) || syn < 1920 || syn > 2099) { toast('起始年份需在 1920–2099 之间'); return; }
+      payload.start_year = syn;
+    }
+    if (phCdCal === 'lunar') {
+      payload.kind = 'yearly_lunar';
+      payload.lunar_month = Number($('cdLunarM').value);
+      payload.lunar_day = Number($('cdLunarD').value);
+      payload.lunar_leap = $('cdLunarLeap').checked;
+    } else {
+      const sv = $('cdSolarInp').value;
+      const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(sv);
+      if (!m) { toast('请选择公历日期'); return; }
+      payload.kind = 'yearly_solar';
+      payload.month = Number(m[2]);
+      payload.day = Number(m[3]);
+    }
+  } else if (phCdCal !== 'lunar') {
+    payload.kind = phCdMode;
+    const sv = $('cdSolarInp').value;
+    if (!sv) { toast('请选择日期'); return; }
+    payload.date = sv;
+  }
+  phCdBusy = true;
+  try {
+    if (phCdMode !== 'yearly' && phCdCal === 'lunar') {
+      payload.kind = phCdMode;
+      if (!phConv || !phConv.solar) await previewPhoneCd();
+      if (!phConv || !phConv.solar) { toast('请检查农历日期是否有效'); return; }
+      payload.date = phConv.solar;
+    }
+    const r = await fetch('api/countdown', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-Intercom-Msg': '1' },
+      body: JSON.stringify(payload)
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) {
+      toast(phCdEditId ? '倒数日已更新' : '已同步到家里的屏幕');
+      toggleCdForm(false);
+      phCdEtag = '';
+      await loadCds(true);
+    } else {
+      toast((j && j.error) || '保存失败');
+    }
+  } catch (e) { toast('网络繁忙，请稍后再试'); }
+  finally { phCdBusy = false; }
+}
+async function pinPhoneCd(id, pinned) {
+  try {
+    const r = await fetch('api/countdown/pin', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-Intercom-Msg': '1' },
+      body: JSON.stringify({ id, pinned })
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) { toast(pinned ? '已置顶到屏幕主页' : '已取消置顶'); phCdEtag = ''; loadCds(true); }
+  } catch (e) {}
+}
+async function delPhoneCd(id) {
+  if (phCdDelId !== id) {
+    phCdDelId = id;
+    clearTimeout(phCdDelT);
+    phCdDelT = setTimeout(() => { phCdDelId = ''; renderPhoneCds(); }, 3000);
+    renderPhoneCds();
+    return;
+  }
+  phCdDelId = '';
+  clearTimeout(phCdDelT);
+  try {
+    const r = await fetch('api/countdown/delete', {
+      method: 'POST', cache: 'no-store',
+      headers: { 'Content-Type': 'application/json', 'X-Intercom-Msg': '1' },
+      body: JSON.stringify({ id })
+    });
+    const j = await r.json().catch(() => null);
+    if (r.ok && j && j.ok) { toast('已删除'); phCdEtag = ''; loadCds(true); }
+  } catch (e) {}
+}
+loadCds();
+document.addEventListener('visibilitychange', () => { if (!document.hidden) loadCds(); });
+setInterval(() => { if (!document.hidden) loadCds(); }, 12000);
 </script>
 </body>
 </html>
@@ -2427,9 +2904,13 @@ class IntercomServer:
             )
             try:
                 out, _ = await asyncio.wait_for(p.communicate(), timeout=2.0)
-            except asyncio.TimeoutError:
-                p.kill()
-                await p.wait()
+            except BaseException as exc:
+                with contextlib.suppress(ProcessLookupError, OSError):
+                    p.kill()
+                with contextlib.suppress(BaseException):
+                    await p.wait()
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
                 return None
             m = re.search(r"(\d+)%", out.decode("utf-8", "ignore"))
             if m:
@@ -2452,9 +2933,13 @@ class IntercomServer:
             )
             try:
                 await asyncio.wait_for(p.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
-                p.kill()
-                await p.wait()
+            except BaseException as exc:
+                with contextlib.suppress(ProcessLookupError, OSError):
+                    p.kill()
+                with contextlib.suppress(BaseException):
+                    await p.wait()
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
         except Exception:
             pass
 
@@ -3456,6 +3941,59 @@ async def handle_message_quick(request):
 async def handle_message_cancel(request):
     return await _relay_small_post(request, "/api/home/messages/cancel", 1024)
 
+async def handle_countdowns_get(request):
+    hdr_l = {k.lower(): v for k, v in request.headers.items()}
+    if hdr_l.get("x-intercom-msg") != "1" or not _msg_origin_ok(hdr_l):
+        raise web.HTTPForbidden()
+    sess = getattr(request, "app", {}).get("study_session")
+    if sess is None:
+        raise web.HTTPServiceUnavailable()
+    up_hdr = {"X-TS-Internal": "1"}
+    if hdr_l.get("if-none-match"):
+        up_hdr["If-None-Match"] = hdr_l["if-none-match"]
+    try:
+        async with sess.get(f"{HOME_API}/api/home/countdowns", headers=up_hdr) as r:
+            if r.status == 304:
+                return web.Response(status=304, headers={"ETag": r.headers.get("ETag", ""), "Cache-Control": "no-store"})
+            raw = await r.content.read(131072)
+            if r.status != 200:
+                return web.json_response({"ok": False, "error": "读取倒数日失败"}, status=502)
+            hdrs_out = {"Cache-Control": "no-store"}
+            if r.headers.get("ETag"):
+                hdrs_out["ETag"] = r.headers["ETag"]
+            return web.Response(body=raw, content_type="application/json", charset="utf-8", headers=hdrs_out)
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        return web.json_response({"ok": False, "error": "家里的屏幕暂时连不上"}, status=502)
+
+
+async def handle_countdown_convert(request):
+    hdr_l = {k.lower(): v for k, v in request.headers.items()}
+    if hdr_l.get("x-intercom-msg") != "1" or not _msg_origin_ok(hdr_l):
+        raise web.HTTPForbidden()
+    sess = getattr(request, "app", {}).get("study_session")
+    if sess is None:
+        raise web.HTTPServiceUnavailable()
+    qs = request.query_string
+    try:
+        async with sess.get(f"{HOME_API}/api/home/countdowns/convert?{qs}", headers={"X-TS-Internal": "1"}) as r:
+            raw = await r.content.read(16384)
+            return web.Response(status=r.status, body=raw, content_type="application/json", charset="utf-8", headers={"Cache-Control": "no-store"})
+    except (aiohttp.ClientError, asyncio.TimeoutError):
+        return web.json_response({"ok": False, "error": "换算服务不可用"}, status=502)
+
+
+async def handle_countdown_save(request):
+    return await _relay_small_post(request, "/api/home/countdowns", 4096)
+
+
+async def handle_countdown_pin(request):
+    return await _relay_small_post(request, "/api/home/countdowns/pin", 1024)
+
+
+async def handle_countdown_delete(request):
+    return await _relay_small_post(request, "/api/home/countdowns/delete", 1024)
+
+
 
 async def handle_message_recall(request):
     return await _relay_small_post(request, "/api/home/messages/recall", 1024)
@@ -3519,6 +4057,11 @@ async def main():
     app.router.add_post("/api/message/cancel", handle_message_cancel)
     app.router.add_post("/api/message/recall", handle_message_recall)
     app.router.add_post("/api/message/delete", handle_message_delete)
+    app.router.add_get("/api/countdowns", handle_countdowns_get)
+    app.router.add_get("/api/countdown/convert", handle_countdown_convert)
+    app.router.add_post("/api/countdown", handle_countdown_save)
+    app.router.add_post("/api/countdown/pin", handle_countdown_pin)
+    app.router.add_post("/api/countdown/delete", handle_countdown_delete)
 
     async def _close_study_session(app_obj):
         sess = app_obj.get("study_session")

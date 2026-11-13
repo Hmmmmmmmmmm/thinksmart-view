@@ -51,11 +51,12 @@ import aiohttp
 from aiohttp import web
 
 sys.path.insert(0, '/opt/thinksmart-addons/vendor')
+import calendar as _pycal
 try:
-    from lunar_python import Solar
+    from lunar_python import Solar, Lunar, LunarYear, LunarMonth
     from lunar_python.util import HolidayUtil
 except Exception:  # pragma: no cover - the page then shows the solar calendar only
-    Solar = None
+    Solar = Lunar = LunarYear = LunarMonth = None
     HolidayUtil = None
 try:
     from thinksmart_display import send_preview  # /usr/local/bin, next to this script
@@ -70,6 +71,7 @@ SHARE = Path(os.environ.get('HOME_SHARE', '/usr/local/share/thinksmart-home'))
 STATE = Path(os.environ.get('STATE_DIRECTORY', '/var/lib/thinksmart-home'))
 CONFIG_PATH = STATE / 'config.json'
 MSG_PATH = STATE / 'messages.json'
+COUNTDOWN_PATH = STATE / 'countdowns.json'
 HUB_CONFIG = Path('/home/ubuntu/xiaozhi-hub-server/main/xiaozhi-server/data/.config.yaml')
 MUSIC = 'http://127.0.0.1:8091/api/music'
 STUDY = 'http://127.0.0.1:8093'
@@ -302,7 +304,7 @@ def _repeat_hits(d, repeat, days):
 
 def remind_next(due, repeat, days=None):
     """The next time a repeating reminder comes up after `due`, at the same clock time (None if it never does)."""
-    d = dt.datetime.fromtimestamp(due)
+    d = dt.datetime.fromtimestamp(due, LOCAL_TZ)
     for i in range(1, 8):
         n = d + dt.timedelta(days=i)
         if _repeat_hits(n, repeat, days):
@@ -346,7 +348,7 @@ def remind_due(at=None, day=None, time_s=None, in_minutes=None, now=None):
     h, mi = int(m.group(1)), int(m.group(2) or 0)
     if h > 23 or mi > 59:
         return None
-    base = dt.datetime.fromtimestamp(now)
+    base = dt.datetime.fromtimestamp(now, LOCAL_TZ)
     d = str(day or '').strip().lower()
     if d in ('', 'today', '今天'):
         target = base.replace(hour=h, minute=mi, second=0, microsecond=0)
@@ -359,7 +361,7 @@ def remind_due(at=None, day=None, time_s=None, in_minutes=None, now=None):
     else:
         try:
             y, mo, dd = (int(x) for x in d.split('-'))
-            target = dt.datetime(y, mo, dd, h, mi)
+            target = dt.datetime(y, mo, dd, h, mi, tzinfo=LOCAL_TZ)
         except (TypeError, ValueError):
             return None
     t = target.timestamp()
@@ -514,8 +516,13 @@ class Weather:
         slot = self.detail_map.get(city)
         if slot is None:
             if len(self.detail_map) >= 12:
-                self.detail_map.clear()
-                self.detail_locks.clear()
+                for k in list(self.detail_map.keys()):
+                    lk = self.detail_locks.get(k)
+                    if lk is None or not lk.locked():
+                        self.detail_map.pop(k, None)
+                        self.detail_locks.pop(k, None)
+                        if len(self.detail_map) < 12:
+                            break
             slot = {'data': None, 'fetched': None, 'failed': None, 'seq': 0, 'last_force': 0.0}
             self.detail_map[city] = slot
         return slot
@@ -859,12 +866,14 @@ def day_info(day):
 
 _MONTH_CACHE = {}
 _TODAY_CACHE = {}
+_CAL_LOCK = threading.Lock()
 
 
 def month_grid(year, month):
     key = (year, month, dt.datetime.now(LOCAL_TZ).date().isoformat())
-    if key in _MONTH_CACHE:
-        return _MONTH_CACHE[key]
+    with _CAL_LOCK:
+        if key in _MONTH_CACHE:
+            return _MONTH_CACHE[key]
     today = dt.datetime.now(LOCAL_TZ).date()
     first = dt.date(year, month, 1)
     start = first - dt.timedelta(days=first.weekday())
@@ -875,9 +884,10 @@ def month_grid(year, month):
         info.update(inMonth=d.month == month, today=d == today, weekend=d.weekday() >= 5, date=d.isoformat())
         days.append(info)
     res = {'year': year, 'month': month, 'days': days}
-    if len(_MONTH_CACHE) > 24:
-        _MONTH_CACHE.clear()
-    _MONTH_CACHE[key] = res
+    with _CAL_LOCK:
+        if len(_MONTH_CACHE) > 24:
+            _MONTH_CACHE.clear()
+        _MONTH_CACHE[key] = res
     return res
 
 
@@ -885,8 +895,9 @@ def today_info():
     now = dt.datetime.now(LOCAL_TZ)
     today = now.date()
     tkey = today.isoformat()
-    if tkey in _TODAY_CACHE:
-        return _TODAY_CACHE[tkey]
+    with _CAL_LOCK:
+        if tkey in _TODAY_CACHE:
+            return _TODAY_CACHE[tkey]
     res = {'date': tkey, 'weekday': '星期' + WEEK_CN[today.weekday()], 'lunar': '', 'year': '', 'tags': []}
     if Solar is None:
         return res
@@ -912,9 +923,10 @@ def today_info():
         if h is not None:
             tags.append({'text': f'{h.getName()}调休上班' if h.isWork() else f'{h.getName()}假期', 'kind': 'work' if h.isWork() else 'off'})
     res['tags'] = tags[:3]
-    if len(_TODAY_CACHE) > 4:
-        _TODAY_CACHE.clear()
-    _TODAY_CACHE[tkey] = res
+    with _CAL_LOCK:
+        if len(_TODAY_CACHE) > 4:
+            _TODAY_CACHE.clear()
+        _TODAY_CACHE[tkey] = res
     return res
 
 
@@ -1098,8 +1110,8 @@ class Inbox:
                 raise ValueError('提醒时间要在 8 天以内的将来')
             tag = 'remind'
             if rp == 'weekly' and not rdays:
-                rdays = [dt.datetime.fromtimestamp(due).isoweekday()]
-            if rp and not _repeat_hits(dt.datetime.fromtimestamp(due), rp, rdays):
+                rdays = [dt.datetime.fromtimestamp(due, LOCAL_TZ).isoweekday()]
+            if rp and not _repeat_hits(dt.datetime.fromtimestamp(due, LOCAL_TZ), rp, rdays):
                 due = remind_next(due, rp, rdays)   # the first day that fits the rule, same time
         elif tag not in ('home',):
             tag = ''
@@ -1559,10 +1571,10 @@ class ScreenVoiceRecorder:
                             proc.terminate()
                         try:
                             await asyncio.wait_for(proc.wait(), timeout=1.0)
-                        except Exception:
+                        except BaseException:
                             with contextlib.suppress(Exception):
                                 proc.kill()
-                            with contextlib.suppress(Exception):
+                            with contextlib.suppress(BaseException):
                                 await asyncio.wait_for(proc.wait(), timeout=1.0)
                     if self.gen == my_gen:
                         self._recording = False
@@ -1593,11 +1605,13 @@ class ScreenVoiceRecorder:
                 proc.terminate()
             try:
                 await asyncio.wait_for(proc.wait(), timeout=1.2)
-            except Exception:
+            except BaseException as exc:
                 with contextlib.suppress(Exception):
                     proc.kill()
-                with contextlib.suppress(Exception):
+                with contextlib.suppress(BaseException):
                     await asyncio.wait_for(proc.wait(), timeout=1.0)
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
         if rtask is not None:
             with contextlib.suppress(Exception):
                 await asyncio.wait_for(rtask, timeout=1.0)
@@ -1645,6 +1659,7 @@ class DeskTimer:
         self.timer_path = Path(timer_path) if timer_path is not None else None
         self._handle = None
         self._clear_handle = None
+        self._alarm_tasks = set()
         self._on_change = on_change
         self._on_alarm = on_alarm
 
@@ -1758,6 +1773,8 @@ class DeskTimer:
         if self.phase in ('running', 'paused'):
             self._save_state()
         self._cancel_handles()
+        for t in list(self._alarm_tasks):
+            t.cancel()
 
     def _cancel_handles(self):
         if self._handle is not None:
@@ -1796,7 +1813,9 @@ class DeskTimer:
             coro = self._on_alarm(self.label, self.total, alarm_seq)
         except TypeError:
             coro = self._on_alarm(self.label, self.total)
-        asyncio.create_task(coro)
+        t = asyncio.create_task(coro)
+        self._alarm_tasks.add(t)
+        t.add_done_callback(self._alarm_tasks.discard)
 
     def _auto_clear_done(self):
         self._clear_handle = None
@@ -2038,8 +2057,705 @@ def _music_public(st):
             'track': {k: str(t.get(k) or '')[:300] for k in ('title', 'artist', 'cover', 'mid')} if t else None}
 
 
-def make_app(inbox=None):
+
+# ---- family countdowns / birthdays / anniversaries / count-up (2026-11-13) ------------------
+MAX_COUNTDOWNS = 60
+CD_TITLE_MAX = 24
+CD_KINDS = ('once', 'yearly_solar', 'yearly_lunar', 'countup')
+CD_CATS = ('exam', 'birthday', 'anniv', 'life')
+LUNAR_M_CN = ('', '正月', '二月', '三月', '四月', '五月', '六月', '七月', '八月', '九月', '十月', '冬月', '腊月')
+LUNAR_D_CN = (
+    '', '初一', '初二', '初三', '初四', '初五', '初六', '初七', '初八', '初九', '初十',
+    '十一', '十二', '十三', '十四', '十五', '十六', '十七', '十八', '十九', '二十',
+    '廿一', '廿二', '廿三', '廿四', '廿五', '廿六', '廿七', '廿八', '廿九', '三十',
+)
+_CN_DIG = {'零': 0, '〇': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+
+
+def _infer_cd_cat(title: str, kind: str) -> str:
+    t = title or ''
+    if any(k in t for k in ('生日', '生辰', '周岁', '寿', '诞辰')):
+        return 'birthday'
+    if any(k in t for k in ('考', '中考', '高考', '期末', '期中', '开学', '放假', '寒假', '暑假', '比赛', '竞赛', '报名', '答辩', '查分')):
+        return 'exam'
+    if any(k in t for k in ('纪念', '结婚', '领证', '相识', '恋爱', '在一起', '周年', '乔迁', '入职')):
+        return 'anniv'
+    return 'life'
+
+
+def _solar_in_year(year: int, month: int, day: int) -> dt.date:
+    if month == 2 and day == 29 and not _pycal.isleap(year):
+        return dt.date(year, 2, 28)
+    return dt.date(year, month, day)
+
+
+def _lunar_occ_in_year(ly: int, lm: int, ld: int, is_leap: bool):
+    if Lunar is None or LunarYear is None or LunarMonth is None:
+        return None
+    try:
+        leap_m = LunarYear.fromYear(ly).getLeapMonth()
+        eff_m = -lm if (is_leap and leap_m == lm) else lm
+        m_obj = LunarMonth.fromYm(ly, eff_m)
+        if m_obj is None:
+            eff_m = lm
+            m_obj = LunarMonth.fromYm(ly, eff_m)
+        max_d = m_obj.getDayCount() if m_obj is not None else 29
+        eff_d = min(max(1, ld), max_d)
+        s = Lunar.fromYmd(ly, eff_m, eff_d).getSolar()
+        return dt.date(s.getYear(), s.getMonth(), s.getDay())
+    except Exception:
+        return None
+
+
+def _next_lunar_occ(today: dt.date, lm: int, ld: int, is_leap: bool):
+    if Solar is None:
+        return today, today.year
+    base_ly = Solar.fromYmd(today.year, today.month, today.day).getLunar().getYear()
+    best = None
+    for ly in (base_ly - 1, base_ly, base_ly + 1, base_ly + 2):
+        cand = _lunar_occ_in_year(ly, lm, ld, is_leap)
+        if cand is not None and cand >= today:
+            if best is None or cand < best[0]:
+                best = (cand, ly)
+    if best is not None:
+        return best
+    cand = _lunar_occ_in_year(base_ly, lm, ld, is_leap) or today
+    return cand, base_ly
+
+
+def _solar_lunar_str(d: dt.date) -> str:
+    if Solar is None:
+        return ''
+    try:
+        lu = Solar.fromYmd(d.year, d.month, d.day).getLunar()
+        return f'农历{lu.getMonthInChinese()}月{lu.getDayInChinese()}'
+    except Exception:
+        return ''
+
+
+def _parse_cn_num(s: str):
+    s = (s or '').strip()
+    if not s:
+        return None
+    if s.isdigit():
+        return int(s)
+    if s == '初十':
+        return 10
+    if s.startswith('初') and len(s) == 2 and s[1] in _CN_DIG:
+        return _CN_DIG[s[1]]
+    if s == '十':
+        return 10
+    if s == '二十' or s == '廿':
+        return 20
+    if s == '三十' or s == '卅':
+        return 30
+    if s.startswith('十') and len(s) == 2 and s[1] in _CN_DIG:
+        return 10 + _CN_DIG[s[1]]
+    if s.startswith('廿') and len(s) == 2 and s[1] in _CN_DIG:
+        return 20 + _CN_DIG[s[1]]
+    if s.startswith('二') and len(s) >= 2:
+        rest = s[2:] if s.startswith('二十') else s[1:]
+        if len(rest) == 1 and rest in _CN_DIG:
+            return 20 + _CN_DIG[rest]
+    if all(ch in _CN_DIG for ch in s):
+        val = 0
+        for ch in s:
+            val = val * 10 + _CN_DIG[ch]
+        return val
+    return None
+
+
+def parse_lunar_spec(raw) -> tuple:
+    """Parse Chinese/numeric lunar month-day text like '闰六月十五', '腊月廿八', '10-12', '十月12日' -> (m, d, leap)."""
+    s = str(raw or '').strip().replace('农历', '').replace('阴历', '').strip()
+    if not s:
+        raise ValueError('农历日期不能为空')
+    is_leap = False
+    if s.startswith('闰'):
+        is_leap = True
+        s = s[1:].strip()
+    m_num = re.fullmatch(r'(\d{1,2})[-/.月](\d{1,2})[日号]?', s)
+    if m_num:
+        lm, ld = int(m_num.group(1)), int(m_num.group(2))
+        if 1 <= lm <= 12 and 1 <= ld <= 30:
+            return lm, ld, is_leap
+        raise ValueError('农历月日超出范围')
+    m_map = {'正': 1, '一': 1, '元': 1, '二': 2, '三': 3, '四': 4, '五': 5, '六': 6,
+             '七': 7, '八': 8, '九': 9, '十': 10, '十一': 11, '冬': 11, '十二': 12, '腊': 12}
+    if '月' in s:
+        mp, dp = s.split('月', 1)
+        mp = mp.strip()
+        dp = dp.strip().rstrip('日号')
+        lm = int(mp) if mp.isdigit() else m_map.get(mp)
+        ld = _parse_cn_num(dp)
+        if lm and ld and 1 <= lm <= 12 and 1 <= ld <= 30:
+            return lm, ld, is_leap
+    raise ValueError('没听清农历几月几日，例如“农历十月十二”')
+
+
+def convert_calendar_preview(cal: str, y: int, m: int, d: int, is_leap: bool = False, today: dt.date = None) -> dict:
+    today = today or dt.datetime.now(LOCAL_TZ).date()
+    y = max(1920, min(2099, int(y)))
+    m = max(1, min(12, int(m)))
+    if cal == 'lunar':
+        if Solar is None or Lunar is None or LunarYear is None or LunarMonth is None:
+            raise ValueError('农历组件不可用')
+        leap_in_year = LunarYear.fromYear(y).getLeapMonth()
+        eff_leap = bool(is_leap and leap_in_year == m)
+        eff_m = -m if eff_leap else m
+        m_obj = LunarMonth.fromYm(y, eff_m)
+        max_d = m_obj.getDayCount() if m_obj is not None else 29
+        eff_d = max(1, min(int(d), max_d))
+        lu = Lunar.fromYmd(y, eff_m, eff_d)
+        so = lu.getSolar()
+        sd = dt.date(so.getYear(), so.getMonth(), so.getDay())
+        next_occ, next_occ_ly = _next_lunar_occ(today, m, eff_d, bool(is_leap))
+        return {
+            'ok': True, 'cal': 'lunar',
+            'solar': sd.isoformat(), 'solar_y': sd.year, 'solar_m': sd.month, 'solar_d': sd.day,
+            'weekday': '星期' + WEEK_CN[sd.weekday()],
+            'lunar_y': y, 'lunar_m': m, 'lunar_d': eff_d, 'lunar_leap': eff_leap,
+            'leap_month_in_year': leap_in_year, 'max_days': max_d,
+            'lunar_label': f'农历{"闰" if eff_leap else ""}{LUNAR_M_CN[m]}{LUNAR_D_CN[eff_d]}',
+            'days_from_today': (sd - today).days,
+            'next_yearly_solar': next_occ.isoformat(),
+            'next_yearly_days': (next_occ - today).days,
+            'next_yearly_occ_year': next_occ_ly,
+        }
+    max_d = _pycal.monthrange(y, m)[1]
+    eff_d = max(1, min(int(d), max_d))
+    sd = dt.date(y, m, eff_d)
+    lu_y, lu_m, lu_d, lu_leap, leap_in_y, lu_lbl = y, m, eff_d, False, 0, ''
+    if Solar is not None:
+        lu = Solar.fromYmd(sd.year, sd.month, sd.day).getLunar()
+        raw_lm = lu.getMonth()
+        lu_y, lu_m, lu_d, lu_leap = lu.getYear(), abs(raw_lm), lu.getDay(), (raw_lm < 0)
+        leap_in_y = LunarYear.fromYear(lu_y).getLeapMonth() if LunarYear is not None else 0
+        lu_lbl = f'农历{"闰" if lu_leap else ""}{LUNAR_M_CN[lu_m]}{LUNAR_D_CN[lu_d]}'
+    cand_yr = _solar_in_year(today.year, m, eff_d)
+    if cand_yr < today:
+        cand_yr = _solar_in_year(today.year + 1, m, eff_d)
+    return {
+        'ok': True, 'cal': 'solar',
+        'solar': sd.isoformat(), 'solar_y': sd.year, 'solar_m': sd.month, 'solar_d': sd.day,
+        'weekday': '星期' + WEEK_CN[sd.weekday()],
+        'lunar_y': lu_y, 'lunar_m': lu_m, 'lunar_d': lu_d, 'lunar_leap': lu_leap,
+        'leap_month_in_year': leap_in_y, 'max_days': max_d,
+        'lunar_label': lu_lbl,
+        'days_from_today': (sd - today).days,
+        'next_yearly_solar': cand_yr.isoformat(),
+        'next_yearly_days': (cand_yr - today).days,
+        'next_yearly_occ_year': cand_yr.year,
+    }
+
+
+_CD_MILESTONES = (7, 21, 30, 50, 100, 200, 365, 500, 1000)
+
+
+def _cd_span_and_progress(kind: str, days: int, today: dt.date, target_iso: str, created_at: float) -> tuple:
+    """Return (span_hint, progress_pct, progress_label) with 0..100 integer-friendly float."""
+    if kind == 'countup':
+        if days < 0:
+            ad = abs(days)
+            return (f'{ad} 天后开始', 0, f'将于 {target_iso} 开始累计')
+        nxt = next((m for m in _CD_MILESTONES if m > days), ((days // 365) + 1) * 365)
+        prev = 0
+        for m in _CD_MILESTONES:
+            if m <= days:
+                prev = m
+            else:
+                break
+        if days >= 1000 and prev == 1000:
+            prev = (days // 365) * 365
+        span_len = max(1, nxt - prev)
+        pct = max(4, min(100, round((days - prev) * 100 / span_len)))
+        rem = nxt - days
+        if days in _CD_MILESTONES or (days >= 365 and days % 365 == 0):
+            hint = f'已达成 {days} 天里程碑'
+            plbl = f'里程碑达成 · 下一目标 {nxt} 天'
+            pct = 100
+        else:
+            hint = f'距 {nxt} 天还差 {rem} 天'
+            plbl = f'下一里程碑 {nxt} 天 · 还差 {rem} 天'
+        return (hint, pct, plbl)
+
+    if days == 0:
+        return ('就是今天', 100, '今天到期 · 重要日子')
+    if days < 0:
+        ad = abs(days)
+        hint = '昨天' if ad == 1 else ('前天' if ad == 2 else f'已过去 {ad} 天')
+        return (hint, 100, f'目标日已过去 {ad} 天')
+
+    if days == 1:
+        hint = '明天'
+    elif days == 2:
+        hint = '后天'
+    elif days < 14:
+        hint = f'{days} 天后'
+    elif days < 60:
+        w, r = divmod(days, 7)
+        hint = f'约 {w} 周' + (f' {r} 天' if r else '')
+    else:
+        mo, r = divmod(days, 30)
+        wk = round(days / 7)
+        hint = f'约 {mo} 个月' + (f' {r} 天' if r >= 3 else '') + f' · {wk} 周'
+
+    if kind.startswith('yearly_'):
+        pct = max(4, min(99, round(max(0, 365 - min(365, days)) * 100 / 365)))
+        plbl = f'年度周期进度 · 还有 {days} 天（{hint}）'
+    else:
+        created_d = today
+        if created_at and created_at > 946684800:
+            try:
+                created_d = dt.datetime.fromtimestamp(created_at, LOCAL_TZ).date()
+            except (OSError, OverflowError, ValueError):
+                created_d = today
+        tgt_d = dt.date.fromisoformat(target_iso)
+        total_d = (tgt_d - created_d).days
+        if total_d > days and total_d >= 2:
+            done_d = total_d - days
+            pct = max(4, min(99, round(done_d * 100 / total_d)))
+            plbl = f'自添加已走过 {done_d}/{total_d} 天 · 剩余 {hint}'
+        else:
+            pct = max(6, min(96, round(max(0, 100 - min(95, days)))))
+            plbl = f'距离目标还有 {days} 天（{hint}）'
+    return (hint, pct, plbl)
+
+
+def _enrich_cd(item: dict, today: dt.date) -> dict:
+    kind = item.get('kind') or 'once'
+    cat = item.get('category') if item.get('category') in CD_CATS else _infer_cd_cat(item.get('title', ''), kind)
+    start_year = item.get('start_year') if isinstance(item.get('start_year'), int) else None
+    created_at = float(item.get('created_at') or 0.0)
+    anniv_num = None
+    anniv_label = ''
+    if kind == 'yearly_solar':
+        m = int(item.get('month') or 1)
+        d = int(item.get('day') or 1)
+        cand = _solar_in_year(today.year, m, d)
+        if cand < today:
+            cand = _solar_in_year(today.year + 1, m, d)
+        days = (cand - today).days
+        target_iso = cand.isoformat()
+        rule_lbl = f'每年公历 {m}月{d}日'
+        lunar_s = _solar_lunar_str(cand)
+        if start_year and cand.year > start_year:
+            anniv_num = cand.year - start_year
+            anniv_label = f'{anniv_num}{"周岁" if cat == "birthday" else "周年"}'
+        wk = '星期' + WEEK_CN[cand.weekday()]
+    elif kind == 'yearly_lunar':
+        lm = int(item.get('lunar_month') or 1)
+        ld = int(item.get('lunar_day') or 1)
+        lp = bool(item.get('lunar_leap'))
+        cand, occ_ly = _next_lunar_occ(today, lm, ld, lp)
+        days = (cand - today).days
+        target_iso = cand.isoformat()
+        rule_lbl = f'每年农历{"闰" if lp else ""}{LUNAR_M_CN[lm]}{LUNAR_D_CN[ld]}'
+        lunar_s = f'农历{"闰" if lp else ""}{LUNAR_M_CN[lm]}{LUNAR_D_CN[ld]}'
+        if start_year and occ_ly > start_year:
+            anniv_num = occ_ly - start_year
+            anniv_label = f'{anniv_num}{"周岁" if cat == "birthday" else "周年"}'
+        wk = '星期' + WEEK_CN[cand.weekday()]
+    elif kind == 'countup':
+        orig = dt.date.fromisoformat(item['date'])
+        days = (today - orig).days
+        target_iso = orig.isoformat()
+        rule_lbl = f'起始日 {target_iso}'
+        lunar_s = _solar_lunar_str(orig)
+        if days >= 365:
+            yrs = days // 365
+            anniv_num = yrs
+            anniv_label = f'满{yrs}年'
+        wk = '星期' + WEEK_CN[orig.weekday()]
+    else:
+        tgt = dt.date.fromisoformat(item['date'])
+        days = (tgt - today).days
+        target_iso = tgt.isoformat()
+        rule_lbl = '单次倒数'
+        lunar_s = _solar_lunar_str(tgt)
+        wk = '星期' + WEEK_CN[tgt.weekday()]
+    span_hint, prog_pct, prog_lbl = _cd_span_and_progress(kind, days, today, target_iso, created_at)
+    return {
+        'id': item['id'],
+        'title': item['title'],
+        'kind': kind,
+        'category': cat,
+        'pinned': bool(item.get('pinned')),
+        'who': item.get('who') or '',
+        'date': item.get('date') or '',
+        'month': int(item.get('month') or 0),
+        'day': int(item.get('day') or 0),
+        'lunar_month': int(item.get('lunar_month') or 0),
+        'lunar_day': int(item.get('lunar_day') or 0),
+        'lunar_leap': bool(item.get('lunar_leap')),
+        'start_year': start_year,
+        'created_at': created_at,
+        'target_date': target_iso,
+        'days': days,
+        'weekday': wk,
+        'lunar_str': lunar_s,
+        'rule_label': rule_lbl,
+        'anniv_num': anniv_num,
+        'anniv_label': anniv_label,
+        'span_hint': span_hint,
+        'progress_pct': prog_pct,
+        'progress_label': prog_lbl,
+    }
+
+
+def _cd_sort_key(e: dict):
+    active = (e['kind'] == 'countup' and e['days'] >= 0) or (e['kind'] != 'countup' and e['days'] >= 0)
+    if e['pinned'] and active:
+        return (0, 0 if e['kind'] != 'countup' else 1, e['days'] if e['kind'] != 'countup' else -e['days'], -e['created_at'])
+    if e['kind'] != 'countup' and e['days'] >= 0:
+        return (1, 0, e['days'], -e['created_at'])
+    if e['kind'] == 'countup':
+        return (2, 0 if e['days'] >= 0 else 1, -e['days'] if e['days'] >= 0 else abs(e['days']), -e['created_at'])
+    return (3, 0, -e['days'], -e['created_at'])
+
+
+class CountdownStore:
+    def __init__(self, path=COUNTDOWN_PATH):
+        self.path = Path(path)
+        self.lock = threading.Lock()
+        self.items = []
+        self.version = 1
+        self.open_ui_seq = 0
+        self._open_ui_mono = 0.0
+        self.close_ui_seq = 0
+        self._close_ui_mono = 0.0
+        self._summary_memo = {'key': None, 'val': None}
+        self._load()
+
+    def _sanitize_stored(self, raw):
+        if not isinstance(raw, dict):
+            return None
+        cid = raw.get('id')
+        title = ' '.join(str(raw.get('title') or '').split())[:CD_TITLE_MAX]
+        kind = raw.get('kind')
+        if not (isinstance(cid, str) and re.fullmatch(r'[0-9a-f]{12}', cid) and title and kind in CD_KINDS):
+            return None
+        cat = raw.get('category') if raw.get('category') in CD_CATS else _infer_cd_cat(title, kind)
+        sy = raw.get('start_year')
+        sy = int(sy) if type(sy) is int and 1920 <= sy <= 2099 else None
+        out = {
+            'id': cid, 'title': title, 'kind': kind, 'category': cat,
+            'pinned': bool(raw.get('pinned')),
+            'who': str(raw.get('who') or '').strip()[:8],
+            'date': '', 'month': 0, 'day': 0,
+            'lunar_month': 0, 'lunar_day': 0, 'lunar_leap': False,
+            'start_year': sy,
+            'created_at': float(raw['created_at']) if type(raw.get('created_at')) in (int, float) else 0.0,
+        }
+        try:
+            if kind in ('once', 'countup'):
+                d = dt.date.fromisoformat(str(raw.get('date') or ''))
+                if not (1920 <= d.year <= 2099):
+                    return None
+                out['date'] = d.isoformat()
+            elif kind == 'yearly_solar':
+                m, d = int(raw.get('month') or 0), int(raw.get('day') or 0)
+                dt.date(2024, m, d)
+                out['month'], out['day'] = m, d
+            elif kind == 'yearly_lunar':
+                lm, ld = int(raw.get('lunar_month') or 0), int(raw.get('lunar_day') or 0)
+                if not (1 <= lm <= 12 and 1 <= ld <= 30):
+                    return None
+                out['lunar_month'], out['lunar_day'], out['lunar_leap'] = lm, ld, bool(raw.get('lunar_leap'))
+        except Exception:
+            return None
+        return out
+
+    def _load(self):
+        with contextlib.suppress(OSError, ValueError, UnicodeDecodeError):
+            raw = json.loads(_read_regular_bytes(self.path, 256 * 1024, private=True).decode('utf-8'))
+            if isinstance(raw, list):
+                seen = set()
+                loaded = []
+                pinned_seen = False
+                for x in raw[:MAX_COUNTDOWNS]:
+                    clean = self._sanitize_stored(x)
+                    if clean and clean['id'] not in seen:
+                        seen.add(clean['id'])
+                        if clean['pinned']:
+                            if pinned_seen:
+                                clean['pinned'] = False
+                            else:
+                                pinned_seen = True
+                        loaded.append(clean)
+                self.items = loaded
+
+    def trigger_open_ui(self):
+        with self.lock:
+            self.open_ui_seq += 1
+            self._open_ui_mono = time.monotonic()
+            return self.open_ui_seq
+
+    def is_open_ui_fresh(self) -> bool:
+        return self.open_ui_seq > 0 and (time.monotonic() - self._open_ui_mono) < 18.0
+
+    def trigger_close_ui(self):
+        with self.lock:
+            self.close_ui_seq += 1
+            self._close_ui_mono = time.monotonic()
+            return self.close_ui_seq
+
+    def is_close_ui_fresh(self) -> bool:
+        return self.close_ui_seq > 0 and (time.monotonic() - self._close_ui_mono) < 18.0
+
+    def upsert(self, payload: dict) -> dict:
+        if not isinstance(payload, dict):
+            raise ValueError('参数格式错误')
+        cid = payload.get('id')
+        is_edit = bool(cid)
+        if is_edit and (not isinstance(cid, str) or not re.fullmatch(r'[0-9a-f]{12}', cid)):
+            raise ValueError('条目 ID 无效')
+        title = ' '.join(str(payload.get('title') or '').split())
+        if not title:
+            raise ValueError('请填写倒数日名称')
+        if len(title) > CD_TITLE_MAX:
+            raise ValueError(f'名称最多 {CD_TITLE_MAX} 个字')
+        kind = str(payload.get('kind') or 'once').strip()
+        if kind not in CD_KINDS:
+            raise ValueError('不支持的日期类型')
+        raw_cat = str(payload.get('category') or '').strip()
+        cat = raw_cat if raw_cat in CD_CATS else _infer_cd_cat(title, kind)
+        who = str(payload.get('who') or '').strip()[:8]
+        sy_raw = payload.get('start_year')
+        start_year = None
+        if sy_raw not in (None, '', 0, '0', False):
+            try:
+                sy_val = int(sy_raw)
+                if not (1920 <= sy_val <= 2099):
+                    raise ValueError()
+                start_year = sy_val
+            except (TypeError, ValueError):
+                raise ValueError('起始年份需在 1920 到 2099 之间') from None
+
+        rec = {
+            'id': cid or secrets.token_hex(6),
+            'title': title, 'kind': kind, 'category': cat,
+            'pinned': False, 'who': who,
+            'date': '', 'month': 0, 'day': 0,
+            'lunar_month': 0, 'lunar_day': 0, 'lunar_leap': False,
+            'start_year': start_year if kind in ('yearly_solar', 'yearly_lunar') else None,
+            'created_at': time.time(),
+        }
+        if kind in ('once', 'countup'):
+            d_str = str(payload.get('date') or '').strip()
+            try:
+                d_obj = dt.date.fromisoformat(d_str)
+            except ValueError:
+                raise ValueError('请选择有效的公历日期（YYYY-MM-DD）') from None
+            min_y = 1920 if kind == 'countup' else 1950
+            if not (min_y <= d_obj.year <= 2099):
+                raise ValueError(f'年份需在 {min_y} 到 2099 之间')
+            rec['date'] = d_obj.isoformat()
+        elif kind == 'yearly_solar':
+            m_val, d_val = payload.get('month'), payload.get('day')
+            if (m_val is None or d_val is None) and payload.get('date'):
+                ds = str(payload.get('date')).strip()
+                m_iso = re.fullmatch(r'(?:(\d{4})-)?(\d{1,2})-(\d{1,2})', ds)
+                if m_iso:
+                    m_val, d_val = int(m_iso.group(2)), int(m_iso.group(3))
+            try:
+                m_i, d_i = int(m_val), int(d_val)
+                dt.date(2024, m_i, d_i)
+            except (TypeError, ValueError):
+                raise ValueError('请选择有效的公历月和日') from None
+            rec['month'], rec['day'] = m_i, d_i
+        elif kind == 'yearly_lunar':
+            if Solar is None or Lunar is None:
+                raise ValueError('农历组件暂不可用')
+            try:
+                lm_i, ld_i = int(payload.get('lunar_month')), int(payload.get('lunar_day'))
+            except (TypeError, ValueError):
+                raise ValueError('请选择有效的农历月和日') from None
+            if not (1 <= lm_i <= 12 and 1 <= ld_i <= 30):
+                raise ValueError('农历月份需在 1-12、日期需在 1-30 之间')
+            rec['lunar_month'] = lm_i
+            rec['lunar_day'] = ld_i
+            rec['lunar_leap'] = bool(payload.get('lunar_leap'))
+
+        today = dt.datetime.now(LOCAL_TZ).date()
+        with self.lock:
+            existing_idx = next((i for i, x in enumerate(self.items) if x['id'] == rec['id']), None)
+            if is_edit and existing_idx is None:
+                raise LookupError('要修改的倒数日不存在')
+            if existing_idx is None and len(self.items) >= MAX_COUNTDOWNS:
+                raise OverflowError(f'倒数日最多保存 {MAX_COUNTDOWNS} 条，请先删除旧条目')
+            if 'pinned' in payload and payload['pinned'] is not None:
+                want_pin = bool(payload['pinned'])
+            elif existing_idx is not None:
+                want_pin = bool(self.items[existing_idx].get('pinned'))
+            else:
+                want_pin = False
+            rec['pinned'] = want_pin
+            if existing_idx is not None:
+                rec['created_at'] = self.items[existing_idx].get('created_at') or rec['created_at']
+            next_items = []
+            for i, x in enumerate(self.items):
+                if i == existing_idx:
+                    next_items.append(rec)
+                else:
+                    nx = dict(x)
+                    if want_pin and nx.get('pinned'):
+                        nx['pinned'] = False
+                    next_items.append(nx)
+            if existing_idx is None:
+                next_items.append(rec)
+            _write_private_json(self.path, next_items)
+            self.items = next_items
+            self.version += 1
+            return _enrich_cd(rec, today)
+
+    def set_pin(self, cid: str, pinned=None) -> dict:
+        if not isinstance(cid, str) or not re.fullmatch(r'[0-9a-f]{12}', cid):
+            raise ValueError('条目 ID 无效')
+        today = dt.datetime.now(LOCAL_TZ).date()
+        with self.lock:
+            target = next((x for x in self.items if x['id'] == cid), None)
+            if target is None:
+                raise LookupError('这条倒数日不存在')
+            want_pin = (not target.get('pinned')) if pinned is None else bool(pinned)
+            next_items = []
+            saved = None
+            for x in self.items:
+                nx = dict(x)
+                if nx['id'] == cid:
+                    nx['pinned'] = want_pin
+                    saved = nx
+                elif want_pin and nx.get('pinned'):
+                    nx['pinned'] = False
+                next_items.append(nx)
+            _write_private_json(self.path, next_items)
+            self.items = next_items
+            self.version += 1
+            return _enrich_cd(saved, today)
+
+    def remove(self, cid: str) -> dict:
+        if not isinstance(cid, str) or not re.fullmatch(r'[0-9a-f]{12}', cid):
+            raise ValueError('条目 ID 无效')
+        today = dt.datetime.now(LOCAL_TZ).date()
+        with self.lock:
+            target = next((x for x in self.items if x['id'] == cid), None)
+            if target is None:
+                raise LookupError('这条倒数日已经不在了')
+            next_items = [x for x in self.items if x['id'] != cid]
+            _write_private_json(self.path, next_items)
+            self.items = next_items
+            self.version += 1
+            return _enrich_cd(target, today)
+
+    def clear_expired(self, today: dt.date = None) -> int:
+        today = today or dt.datetime.now(LOCAL_TZ).date()
+        today_iso = today.isoformat()
+        with self.lock:
+            kept = [x for x in self.items if not (x.get('kind') == 'once' and str(x.get('date') or '') < today_iso)]
+            removed_n = len(self.items) - len(kept)
+            if removed_n > 0:
+                _write_private_json(self.path, kept)
+                self.items = kept
+                self.version += 1
+            return removed_n
+
+    def list_enriched(self, today: dt.date = None) -> list:
+        today = today or dt.datetime.now(LOCAL_TZ).date()
+        with self.lock:
+            snap = [dict(x) for x in self.items]
+        out = [_enrich_cd(x, today) for x in snap]
+        out.sort(key=_cd_sort_key)
+        return out
+
+    def state_summary(self, today: dt.date = None) -> dict:
+        today = today or dt.datetime.now(LOCAL_TZ).date()
+        key = (today.isoformat(), self.version)
+        with self.lock:
+            if self._summary_memo['key'] == key and self._summary_memo['val'] is not None:
+                return self._summary_memo['val']
+            snap = [dict(x) for x in self.items]
+        enriched = [_enrich_cd(x, today) for x in snap]
+        enriched.sort(key=_cd_sort_key)
+        active = [e for e in enriched if e['kind'] == 'countup' or e['days'] >= 0]
+        today_items = [e for e in active if e['kind'] != 'countup' and e['days'] == 0]
+        top = active[0] if active else None
+        nxt = active[1] if len(active) > 1 else None
+        val = {
+            'seq': self.version,
+            'count': len(enriched),
+            'active_count': len(active),
+            'top': top,
+            'next': nxt,
+            'today_items': today_items,
+        }
+        with self.lock:
+            if key == (today.isoformat(), self.version):
+                self._summary_memo = {'key': key, 'val': val}
+        return val
+
+    def marks_for_dates(self, date_isos: list) -> dict:
+        if not date_isos:
+            return {}
+        with self.lock:
+            if not self.items:
+                return {}
+            snap = [dict(x) for x in self.items]
+        parsed_dates = []
+        years = set()
+        for iso in date_isos:
+            try:
+                d = dt.date.fromisoformat(iso)
+                parsed_dates.append((iso, d))
+                years.add(d.year)
+            except ValueError:
+                continue
+        if not parsed_dates:
+            return {}
+        # Precompute lunar occurrence solar dates for candidate lunar years once per item (O(items) instead of O(42))
+        lunar_by_iso = {}
+        if Solar is not None:
+            cand_lys = sorted({y + off for y in years for off in (-1, 0, 1)})
+            for x in snap:
+                if x['kind'] != 'yearly_lunar':
+                    continue
+                for ly in cand_lys:
+                    if x.get('start_year') and ly < x['start_year']:
+                        continue
+                    occ = _lunar_occ_in_year(ly, x['lunar_month'], x['lunar_day'], x['lunar_leap'])
+                    if occ is not None:
+                        lunar_by_iso.setdefault(occ.isoformat(), []).append(x)
+        marks = {}
+        for iso, d in parsed_dates:
+            hits = []
+            for x in snap:
+                k = x['kind']
+                if k == 'once':
+                    if x['date'] == iso:
+                        hits.append(x)
+                elif k == 'countup':
+                    if x['date'] == iso:
+                        hits.append(x)
+                    else:
+                        orig = dt.date.fromisoformat(x['date'])
+                        if d > orig and d == _solar_in_year(d.year, orig.month, orig.day):
+                            hits.append(x)
+                elif k == 'yearly_solar':
+                    if (not x.get('start_year') or d.year >= x['start_year']) and d == _solar_in_year(d.year, x['month'], x['day']):
+                        hits.append(x)
+            for lx in lunar_by_iso.get(iso, ()):
+                if all(h['id'] != lx['id'] for h in hits):
+                    hits.append(lx)
+            if hits:
+                hits.sort(key=lambda it: (0 if it.get('pinned') else 1, 0 if it.get('category') in ('birthday', 'exam') else 1))
+                marks[iso] = [{'id': h['id'], 'title': h['title'], 'category': h['category'], 'kind': h['kind']} for h in hits[:3]]
+        return marks
+
+
+def make_app(inbox=None, countdowns=None):
     inbox = inbox or Inbox()
+    if countdowns is None:
+        cd_path = (inbox.path.parent / 'countdowns.json') if isinstance(getattr(inbox, 'path', None), Path) else COUNTDOWN_PATH
+        countdowns = CountdownStore(cd_path)
     weather = Weather()
     clip_player = SpeakerClipPlayer()
     voice_recorder = ScreenVoiceRecorder()
@@ -2207,6 +2923,17 @@ def make_app(inbox=None):
     timer_say_sent = [False]
     voice_reply_lock = asyncio.Lock()
     app_loop = [None]
+    bg_tasks = set()
+
+    def _spawn_bg(coro):
+        try:
+            t = asyncio.create_task(coro)
+        except RuntimeError:
+            coro.close()
+            return None
+        bg_tasks.add(t)
+        t.add_done_callback(bg_tasks.discard)
+        return t
 
     def _clear_duck_flag_if_idle():
         if not voice_recorder.is_recording and not clip_player.is_playing and home_duck_hold[0] == 0:
@@ -2257,7 +2984,7 @@ def make_app(inbox=None):
         lp = app_loop[0]
         if lp is not None and not lp.is_closed():
             with contextlib.suppress(RuntimeError):
-                lp.call_soon_threadsafe(lambda: asyncio.create_task(_unduck_home_audio_if_idle()))
+                lp.call_soon_threadsafe(lambda: _spawn_bg(_unduck_home_audio_if_idle()))
 
     def _clear_all_amb_owners():
         amb_op_gen[0] += 1
@@ -2348,7 +3075,7 @@ def make_app(inbox=None):
                         return
             await _stop_owned_ambient('focus')
 
-        focus_amb_handle[0] = loop.call_later(max(1.0, delay_sec), lambda: asyncio.create_task(_check()))
+        focus_amb_handle[0] = loop.call_later(max(1.0, delay_sec), lambda: _spawn_bg(_check()))
 
     alarm_cancel_ev = asyncio.Event()
 
@@ -2446,9 +3173,9 @@ def make_app(inbox=None):
             if value['study']['available']:
                 focus_phase[0] = (value['study']['focus'] or {}).get('phase')
                 if ambient_owner['focus'] and focus_phase[0] != 'focus':
-                    asyncio.create_task(_stop_owned_ambient('focus'))
+                    _spawn_bg(_stop_owned_ambient('focus'))
             if ambient_owner['timer'] and desk_timer.phase not in ('running', 'paused'):
-                asyncio.create_task(_stop_owned_ambient('timer'))
+                _spawn_bg(_stop_owned_ambient('timer'))
             m_pub = value.get('music')
             if m_pub is not None:
                 amb_now = m_pub.get('ambient')
@@ -2472,17 +3199,24 @@ def make_app(inbox=None):
             inbox_state_memo.update(ver=ver, msgs=msgs)
         tmr = desk_timer.public()
         amb_owned = bool(any(ambient_owner.values()))
-        sem_key = (value['music'], value['study'], tmr, ver, amb_owned)
+        today_cd = dt.datetime.now(LOCAL_TZ).date()
+        cds_sum = countdowns.state_summary(today_cd)
+        cd_oseq = countdowns.open_ui_seq
+        cd_cseq = countdowns.close_ui_seq
+        sem_key = (value['music'], value['study'], tmr, ver, amb_owned, today_cd.isoformat(), countdowns.version, cd_oseq, cd_cseq)
         if state_etag_memo['sem_key'] == sem_key:
             etag = state_etag_memo['etag']
         else:
-            sem_bytes = json.dumps({'music': value['music'], 'study': value['study'], 'timer': tmr, 'messages': msgs, 'ambient_owned': amb_owned},
+            sem_bytes = json.dumps({'music': value['music'], 'study': value['study'], 'timer': tmr, 'messages': msgs,
+                                    'ambient_owned': amb_owned, 'countdowns': dict(cds_sum, open_seq=cd_oseq, close_seq=cd_cseq)},
                                    ensure_ascii=False, separators=(',', ':')).encode('utf-8')
             etag = _etag_of(sem_bytes)
             state_etag_memo.update(sem_key=sem_key, etag=etag)
         if request.headers.get('If-None-Match') == etag:
             return web.Response(status=304, headers={'ETag': etag})
-        out_val = dict(value, messages=msgs, timer=tmr, ambient_owned=amb_owned)
+        cds_pub = dict(cds_sum, open_seq=cd_oseq, open_fresh=countdowns.is_open_ui_fresh(),
+                       close_seq=cd_cseq, close_fresh=countdowns.is_close_ui_fresh())
+        out_val = dict(value, messages=msgs, timer=tmr, ambient_owned=amb_owned, countdowns=cds_pub)
         body = json.dumps(out_val, ensure_ascii=False, separators=(',', ':')).encode('utf-8')
         return web.Response(body=body, content_type='application/json', charset='utf-8', headers={'ETag': etag})
 
@@ -2506,11 +3240,19 @@ def make_app(inbox=None):
             raise web.HTTPBadRequest()
         y, mo = int(m.group(1)), int(m.group(2))
         today_iso = dt.datetime.now(LOCAL_TZ).date().isoformat()
-        grid = _MONTH_CACHE.get((y, mo, today_iso))
-        today = _TODAY_CACHE.get(today_iso)
+        with _CAL_LOCK:
+            grid = _MONTH_CACHE.get((y, mo, today_iso))
+            today = _TODAY_CACHE.get(today_iso)
         if grid is None or today is None:
             grid, today = await asyncio.get_running_loop().run_in_executor(_IO_POOL, lambda: (month_grid(y, mo), today_info()))
-        return _memo_resp(request, cal_memo, (y, mo, today_iso), lambda: {'month': grid, 'today': today}, 8)
+        cd_ver = countdowns.version
+        def _build_cal():
+            marks = countdowns.marks_for_dates([c['date'] for c in grid['days']])
+            if not marks:
+                return {'month': grid, 'today': today}
+            days_out = [dict(c, cd=marks[c['date']]) if c['date'] in marks else c for c in grid['days']]
+            return {'month': {'year': grid['year'], 'month': grid['month'], 'days': days_out}, 'today': today}
+        return _memo_resp(request, cal_memo, (y, mo, today_iso, cd_ver), _build_cal, 12)
 
     async def get_music_lyrics(request):
         data = await _get_json(request.app[SESSION], f'{MUSIC}/lyrics', 2.0, max_bytes=262144, etag_box=lyrics_etag_box)
@@ -2876,8 +3618,10 @@ def make_app(inbox=None):
         raise web.HTTPBadRequest()
 
     async def get_inbox(request):
-        return _memo_resp(request, inbox_memo, inbox.version,
-                          lambda: (lambda u: {'count': len(u), 'unread': u[:5]})(inbox.unread()), 2)
+        cd_seq = countdowns.open_ui_seq
+        cd_fresh = countdowns.is_open_ui_fresh()
+        return _memo_resp(request, inbox_memo, (inbox.version, cd_seq, cd_fresh),
+                          lambda: (lambda u: {'count': len(u), 'unread': u[:5], 'cd_open_seq': cd_seq, 'cd_open_fresh': cd_fresh})(inbox.unread()), 4)
 
     async def post_ack(request):
         body = await body_of(request)
@@ -3287,7 +4031,7 @@ def make_app(inbox=None):
         return web.json_response({'ok': ok}, status=200 if ok else 404)
 
     def _when_txt(t, m=None):
-        d, now = dt.datetime.fromtimestamp(t), dt.datetime.now()
+        d, now = dt.datetime.fromtimestamp(t, LOCAL_TZ), dt.datetime.now(LOCAL_TZ)
         if m is not None and repeat_label(m):
             return f'{repeat_label(m)} {d.hour}:{d.minute:02d}'
         day = '今天' if d.date() == now.date() else ('明天' if d.date() == (now + dt.timedelta(days=1)).date() else f'{d.month}月{d.day}日')
@@ -3354,6 +4098,294 @@ def make_app(inbox=None):
             return web.json_response({'ok': False, 'text': '留言保存失败，请稍后再试'})
         raise web.HTTPBadRequest()
 
+    # ---- 2026-11-13: family countdowns / birthdays / anniversaries / count-up routes ----
+    cd_memo = {}
+
+    def _cd_spoken_desc(e: dict) -> str:
+        t = f'「{e["title"]}」'
+        extra = f'（{e["anniv_label"]}）' if e.get('anniv_label') else ''
+        if e['kind'] == 'countup':
+            return f'{t}（{e["rule_label"]}）已累计 {e["days"]} 天' if e['days'] >= 0 else f'{t}（{e["target_date"]} 开始）还有 {-e["days"]} 天开始'
+        when_s = f'{e["rule_label"]}，下一次 {e["target_date"]}' if e['kind'].startswith('yearly_') else f'{e["target_date"]} {e["weekday"]}'
+        if e['days'] == 0:
+            return f'{t}{extra}就是今天（{e["target_date"]}）'
+        if e['days'] > 0:
+            return f'{t}{extra}（{when_s}）还有 {e["days"]} 天'
+        return f'{t}（{e["target_date"]}）已过去 {-e["days"]} 天'
+
+    def _parse_voice_solar(raw_date, today: dt.date):
+        s = str(raw_date or '').strip().replace(' ', '')
+        if not s:
+            return None
+        rel_fixed = {'今天': 0, '今日': 0, '明天': 1, '明日': 1, '后天': 2, '大后天': 3, '昨天': -1, '前天': -2}
+        if s in rel_fixed:
+            return today + dt.timedelta(days=rel_fixed[s])
+        m_rel_after = re.fullmatch(r'(?:过)?(\d+|[一二两三四五六七八九十百]+)[天日]后', s)
+        if m_rel_after:
+            n = _parse_cn_num(m_rel_after.group(1))
+            if n is not None and 0 <= n <= 36500:
+                return today + dt.timedelta(days=n)
+        m_rel_before = re.fullmatch(r'(\d+|[一二两三四五六七八九十百]+)[天日]前', s)
+        if m_rel_before:
+            n = _parse_cn_num(m_rel_before.group(1))
+            if n is not None and 0 <= n <= 36500:
+                return today - dt.timedelta(days=n)
+        m_wk = re.fullmatch(r'(下周|下星期|本周|这周|这星期)([一二三四五六日天])', s)
+        if m_wk:
+            wk_idx = {'一': 0, '二': 1, '三': 2, '四': 3, '五': 4, '六': 5, '日': 6, '天': 6}[m_wk.group(2)]
+            base = today - dt.timedelta(days=today.weekday())
+            if m_wk.group(1).startswith('下'):
+                base += dt.timedelta(days=7)
+            return base + dt.timedelta(days=wk_idx)
+        m_full = re.search(r'(\d{4})[-/.年](\d{1,2})[-/.月](\d{1,2})', s)
+        if m_full:
+            return dt.date(int(m_full.group(1)), int(m_full.group(2)), int(m_full.group(3)))
+        yr_prefix = None
+        rest = s
+        if rest.startswith('明年'):
+            yr_prefix, rest = today.year + 1, rest[2:]
+        elif rest.startswith('后年'):
+            yr_prefix, rest = today.year + 2, rest[2:]
+        elif rest.startswith('今年'):
+            yr_prefix, rest = today.year, rest[2:]
+        elif rest.startswith('去年'):
+            yr_prefix, rest = today.year - 1, rest[2:]
+        m_md = re.fullmatch(r'(\d{1,2})[-/.月](\d{1,2})[日号]?', rest)
+        if m_md:
+            mm, dd = int(m_md.group(1)), int(m_md.group(2))
+        else:
+            mm = dd = None
+            if '月' in rest:
+                mp, dp = rest.split('月', 1)
+                mm = _parse_cn_num(mp)
+                dd = _parse_cn_num(dp.rstrip('日号'))
+        if mm and dd and 1 <= mm <= 12 and 1 <= dd <= 31:
+            if yr_prefix is not None:
+                return _solar_in_year(yr_prefix, mm, dd)
+            cand = _solar_in_year(today.year, mm, dd)
+            if cand < today:
+                cand = _solar_in_year(today.year + 1, mm, dd)
+            return cand
+        return None
+
+    async def get_countdowns(request):
+        today = dt.datetime.now(LOCAL_TZ).date()
+        return _memo_resp(request, cd_memo, (today.isoformat(), countdowns.version),
+                          lambda: {'ok': True, 'today': today.isoformat(), 'family': list(FAMILY),
+                                   'seq': countdowns.version, 'items': countdowns.list_enriched(today)}, 4)
+
+    async def get_countdown_convert(request):
+        cal = 'lunar' if request.query.get('cal') == 'lunar' else 'solar'
+        today = dt.datetime.now(LOCAL_TZ).date()
+        try:
+            y = int(request.query.get('y') or today.year)
+            m = int(request.query.get('m') or today.month)
+            d = int(request.query.get('d') or today.day)
+            lp = request.query.get('leap') in ('1', 'true', 'True')
+            res = convert_calendar_preview(cal, y, m, d, lp, today)
+        except (TypeError, ValueError) as exc:
+            return web.json_response({'ok': False, 'error': str(exc) or '日期参数无效'}, status=400)
+        return web.json_response(res)
+
+    async def post_countdown(request):
+        body = await body_of(request)
+        try:
+            item = countdowns.upsert(body)
+        except LookupError as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=404)
+        except (ValueError, OverflowError) as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=400)
+        except OSError:
+            return web.json_response({'ok': False, 'error': '保存失败，请稍后重试'}, status=503)
+        _forget_state()
+        return web.json_response({'ok': True, 'item': item, 'seq': countdowns.version})
+
+    async def post_countdown_pin(request):
+        body = await body_of(request)
+        try:
+            item = countdowns.set_pin(body.get('id'), body.get('pinned'))
+        except LookupError as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=404)
+        except ValueError as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=400)
+        except OSError:
+            return web.json_response({'ok': False, 'error': '保存失败，请稍后重试'}, status=503)
+        _forget_state()
+        return web.json_response({'ok': True, 'item': item, 'seq': countdowns.version})
+
+    async def post_countdown_delete(request):
+        body = await body_of(request)
+        if body.get('clear_expired') is True:
+            try:
+                removed_count = countdowns.clear_expired(dt.datetime.now(LOCAL_TZ).date())
+            except OSError:
+                return web.json_response({'ok': False, 'error': '清理失败，请稍后重试'}, status=503)
+            _forget_state()
+            return web.json_response({'ok': True, 'cleared': removed_count, 'seq': countdowns.version})
+        try:
+            removed = countdowns.remove(body.get('id'))
+        except LookupError as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=404)
+        except ValueError as exc:
+            return web.json_response({'ok': False, 'error': str(exc)}, status=400)
+        except OSError:
+            return web.json_response({'ok': False, 'error': '保存失败，请稍后重试'}, status=503)
+        _forget_state()
+        return web.json_response({'ok': True, 'removed': removed, 'seq': countdowns.version})
+
+    async def post_countdown_tool(request):
+        """小麦语音桥接：增删查置顶与打开倒数日页面（不含法定节假日，只管家里自己的日子）。"""
+        internal(request)
+        body = await body_of(request)
+        act = str(body.get('action') or 'list').strip().lower()
+        want_open = bool(body.get('open_ui')) or act in ('open', 'open_ui', 'show')
+        today = dt.datetime.now(LOCAL_TZ).date()
+        try:
+            if act in ('close', 'hide', 'back', 'exit'):
+                countdowns.trigger_close_ui()
+                _forget_state()
+                return web.json_response({'ok': True, 'close_ui': True, 'text': '好的，已关闭倒数日页面回到主页。'})
+
+            if act in ('open', 'open_ui', 'show'):
+                countdowns.trigger_open_ui()
+                _forget_state()
+                top = countdowns.state_summary(today).get('top')
+                tail = f'最近一条是{_cd_spoken_desc(top)}。' if top else '目前还没有添加倒数日，可以在屏幕上点击新建。'
+                return web.json_response({'ok': True, 'open_ui': True, 'text': f'好的，已在屏幕上打开倒数日页面。{tail}'})
+
+            if act in ('list', 'query', 'check', 'get'):
+                if want_open:
+                    countdowns.trigger_open_ui()
+                    _forget_state()
+                items = countdowns.list_enriched(today)
+                kw = ' '.join(str(body.get('keyword') or body.get('title') or '').split())
+                if not items:
+                    return web.json_response({'ok': True, 'text': '家里目前还没有添加倒数日或纪念日，可以对我说“帮我记个倒数日”'})
+                if kw:
+                    cat_alias = {'生日': 'birthday', '考试': 'exam', '纪念日': 'anniv', '正数日': 'countup'}
+                    hits = [e for e in items if kw in e['title'] or (e['who'] and kw in e['who'])
+                            or (cat_alias.get(kw) and (e['category'] == cat_alias[kw] or e['kind'] == cat_alias[kw]))]
+                    if hits:
+                        return web.json_response({'ok': True, 'text': '；'.join(_cd_spoken_desc(e) for e in hits[:5])})
+                    names = '、'.join(f'「{e["title"]}」' for e in items[:5])
+                    return web.json_response({'ok': True, 'text': f'家里还没有记「{kw}」；目前记着的有：{names}'})
+                active = [e for e in items if e['kind'] == 'countup' or e['days'] >= 0] or items
+                desc = '；'.join(_cd_spoken_desc(e) for e in active[:5])
+                more = f'；一共 {len(items)} 条，可以在屏幕倒数日页面查看全部' if len(items) > 5 else ''
+                return web.json_response({'ok': True, 'text': f'家里记着的日子：{desc}{more}'})
+
+            if act in ('add', 'create', 'set', 'update', 'edit', 'modify'):
+                title = ' '.join(str(body.get('title') or body.get('keyword') or '').split())
+                kw_match = ' '.join(str(body.get('keyword') or '').split())
+                if not title:
+                    return web.json_response({'ok': False, 'text': '要记什么日子呢？请告诉我名称和日期'})
+                existing_items = countdowns.list_enriched(today)
+                matched_existing = next((e for e in existing_items if e['title'] == title), None)
+                if matched_existing is None and act in ('update', 'edit', 'modify') and kw_match:
+                    sub_hits = [e for e in existing_items if kw_match in e['title']]
+                    if len(sub_hits) == 1:
+                        matched_existing = sub_hits[0]
+                        if not body.get('title'):
+                            title = matched_existing['title']
+                raw_kind = str(body.get('kind') or '').strip().lower()
+                cal_hint = str(body.get('calendar') or '').strip().lower()
+                lunar_txt = str(body.get('lunar_date') or body.get('lunar') or '').strip()
+                lm, ld, lp = body.get('lunar_month'), body.get('lunar_day'), bool(body.get('lunar_leap'))
+                is_lunar = (raw_kind == 'yearly_lunar' or cal_hint == 'lunar' or bool(lunar_txt) or (lm is not None and ld is not None))
+                cat_guess = _infer_cd_cat(title, raw_kind or 'once')
+                if not raw_kind or raw_kind not in CD_KINDS:
+                    if is_lunar:
+                        raw_kind = 'yearly_lunar'
+                    elif body.get('repeat') or (cat_guess in ('birthday', 'anniv') and not re.search(r'\d{4}', str(body.get('date') or ''))):
+                        raw_kind = 'yearly_solar'
+                    else:
+                        raw_kind = 'once'
+                payload = {
+                    'title': title,
+                    'kind': raw_kind,
+                    'category': body.get('category') or (matched_existing['category'] if matched_existing else cat_guess),
+                    'who': _who_of(body.get('who')) or str(body.get('who') or '').strip()[:8] or (matched_existing['who'] if matched_existing else ''),
+                    'pinned': bool(body['pinned']) if 'pinned' in body and body['pinned'] is not None else (matched_existing['pinned'] if matched_existing else False),
+                    'start_year': body.get('start_year') if body.get('start_year') is not None else (matched_existing['start_year'] if matched_existing else None),
+                }
+                if matched_existing is not None:
+                    payload['id'] = matched_existing['id']
+                if raw_kind == 'yearly_lunar':
+                    if lm is None or ld is None:
+                        lm, ld, lp = parse_lunar_spec(lunar_txt or body.get('date') or '')
+                    payload.update(lunar_month=int(lm), lunar_day=int(ld), lunar_leap=bool(lp))
+                elif raw_kind == 'yearly_solar':
+                    m_v, d_v = body.get('month'), body.get('day')
+                    if m_v is None or d_v is None:
+                        sd = _parse_voice_solar(body.get('date'), today)
+                        if sd is None:
+                            return web.json_response({'ok': False, 'text': '没听清公历几月几日，请再说一下日期'})
+                        m_v, d_v = sd.month, sd.day
+                        m_yr = re.search(r'(\d{4})', str(body.get('date') or ''))
+                        if m_yr and not payload.get('start_year') and int(m_yr.group(1)) < today.year:
+                            payload['start_year'] = int(m_yr.group(1))
+                    payload.update(month=int(m_v), day=int(d_v))
+                else:
+                    if is_lunar and not body.get('date'):
+                        if lm is None or ld is None:
+                            lm, ld, lp = parse_lunar_spec(lunar_txt)
+                        sd, _ = _next_lunar_occ(today, int(lm), int(ld), bool(lp))
+                    else:
+                        sd = _parse_voice_solar(body.get('date') or ('今天' if raw_kind == 'countup' else ''), today)
+                    if sd is None:
+                        return web.json_response({'ok': False, 'text': '没听清具体哪一天，请说清楚年月日'})
+                    payload['date'] = sd.isoformat()
+                saved = countdowns.upsert(payload)
+                if want_open:
+                    countdowns.trigger_open_ui()
+                _forget_state()
+                pin_s = '，并已置顶到主页' if saved.get('pinned') else ''
+                verb = '更新' if matched_existing is not None else '记下'
+                return web.json_response({'ok': True, 'item': saved, 'updated': matched_existing is not None, 'text': f'好的，已{verb}{_cd_spoken_desc(saved)}{pin_s}'})
+
+            if act in ('delete', 'remove', 'cancel'):
+                items = countdowns.list_enriched(today)
+                if not items:
+                    return web.json_response({'ok': False, 'text': '家里现在没有倒数日记录'})
+                cid = str(body.get('id') or '').strip()
+                kw = ' '.join(str(body.get('keyword') or body.get('title') or '').split())
+                if cid and re.fullmatch(r'[0-9a-f]{12}', cid):
+                    hits = [e for e in items if e['id'] == cid]
+                elif kw:
+                    exact = [e for e in items if e['title'] == kw]
+                    hits = exact if len(exact) == 1 else [e for e in items if kw in e['title']]
+                else:
+                    hits = items if len(items) == 1 else []
+                if len(hits) != 1:
+                    names = '、'.join(f'「{e["title"]}」' for e in items[:6])
+                    return web.json_response({'ok': False, 'text': f'要删除哪一条倒数日？目前有：{names}'})
+                removed = countdowns.remove(hits[0]['id'])
+                _forget_state()
+                return web.json_response({'ok': True, 'text': f'已删除倒数日「{removed["title"]}」'})
+
+            if act in ('pin', 'unpin'):
+                items = countdowns.list_enriched(today)
+                if not items:
+                    return web.json_response({'ok': False, 'text': '家里现在没有倒数日记录'})
+                kw = ' '.join(str(body.get('keyword') or body.get('title') or '').split())
+                exact = [e for e in items if kw and e['title'] == kw]
+                hits = exact if len(exact) == 1 else ([e for e in items if kw in e['title']] if kw else (items if len(items) == 1 else []))
+                if len(hits) != 1:
+                    names = '、'.join(f'「{e["title"]}」' for e in items[:6])
+                    return web.json_response({'ok': False, 'text': f'要把哪一条置顶到主页？目前有：{names}'})
+                want_pin = (act == 'pin') and (body.get('pinned') is not False)
+                updated = countdowns.set_pin(hits[0]['id'], want_pin)
+                if want_open:
+                    countdowns.trigger_open_ui()
+                _forget_state()
+                return web.json_response({'ok': True, 'text': f'已将「{updated["title"]}」{"置顶到屏幕主页" if want_pin else "取消主页置顶"}'})
+        except (ValueError, OverflowError, LookupError) as exc:
+            return web.json_response({'ok': False, 'text': str(exc)})
+        except OSError:
+            return web.json_response({'ok': False, 'text': '倒数日保存失败，请稍后再试'})
+        return web.json_response({'ok': False, 'text': '不支持的倒数日操作'}, status=400)
+
+
     async def _keepalive_304(_req, resp):
         if resp.status == 304:
             resp.headers['Content-Length'] = '0'
@@ -3381,18 +4413,19 @@ def make_app(inbox=None):
         try:
             yield
         finally:
-            for t in [x for x in (keepalive_task, remind_task) if x is not None] + list(transcribe_tasks):
+            app_loop[0] = None
+            _cancel_focus_amb()
+            for t in ([x for x in (keepalive_task, remind_task) if x is not None]
+                      + list(transcribe_tasks) + list(bg_tasks) + list(desk_timer._alarm_tasks)):
                 t.cancel()
                 with contextlib.suppress(asyncio.CancelledError, Exception):
                     await t
-            _cancel_focus_amb()
             desk_timer.shutdown()
             clip_player.stop()
             with contextlib.suppress(Exception):
                 await voice_recorder.cancel()
             with contextlib.suppress(Exception):
                 await _unduck_home_audio_if_idle()
-            app_loop[0] = None
             await app_[SESSION].close()
 
     app.on_response_prepare.append(_keepalive_304)
@@ -3427,6 +4460,12 @@ def make_app(inbox=None):
     app.router.add_post('/api/home/messages/delete', post_message_delete)
     app.router.add_post('/api/home/messages/tool', post_message_tool)
     app.router.add_post('/api/home/voice_reply', post_voice_reply)
+    app.router.add_get('/api/home/countdowns', get_countdowns)
+    app.router.add_post('/api/home/countdowns', post_countdown)
+    app.router.add_get('/api/home/countdowns/convert', get_countdown_convert)
+    app.router.add_post('/api/home/countdowns/pin', post_countdown_pin)
+    app.router.add_post('/api/home/countdowns/delete', post_countdown_delete)
+    app.router.add_post('/api/home/countdowns/tool', post_countdown_tool)
     async def preflight(_request):
         return web.Response(status=204)
 

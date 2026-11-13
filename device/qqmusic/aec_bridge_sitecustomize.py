@@ -437,9 +437,60 @@ MUSIC_TOOLS = [
             },
         },
     },
+    {
+        'name': 'self.home.countdown',
+        'description': (
+            '管理家里屏幕上的「倒数日 / 生日 / 纪念日 / 累计正数日」（只管家里自己记的重要日子，不含法定节假日）。'
+            '当用户问「还有多少天中考」「最近家里有什么日子」「妈妈生日还有几天」、或说「帮我加个倒数日…」「记一下农历十月十二妈妈生日」'
+            '「记个正数日从今天开始背单词」「把姐姐中考置顶到主页」「删掉期末考倒数日」「打开倒数日页面」时调用。'
+        ),
+        'inputSchema': {
+            'type': 'object',
+            'properties': {
+                'action': {
+                    'type': 'string',
+                    'enum': ['list', 'query', 'add', 'update', 'delete', 'pin', 'unpin', 'open', 'close'],
+                    'description': 'list(查全部)/query(查某条还有几天)/add(新增)/update(修改已有日期)/delete(删除)/pin(置顶到主页)/unpin(取消置顶)/open(打开倒数日页面)/close(关闭倒数日回主页)',
+                },
+                'title': {
+                    'type': 'string',
+                    'description': '名称（不超过24字），如 姐姐中考、妈妈生日、结婚纪念日、每日坚持阅读',
+                },
+                'keyword': {
+                    'type': 'string',
+                    'description': '查询、置顶或删除时的关键词，如 中考、妈妈生日、纪念日',
+                },
+                'kind': {
+                    'type': 'string',
+                    'enum': ['once', 'yearly_solar', 'yearly_lunar', 'countup'],
+                    'description': 'once=单次目标倒数日，yearly_solar=每年公历生日/纪念日，yearly_lunar=每年农历生日/纪念日，countup=从某天起累计正数日',
+                },
+                'date': {
+                    'type': 'string',
+                    'description': '公历日期 YYYY-MM-DD 或 MM-DD（如 2027-06-20、05-20、今天、明天）',
+                },
+                'lunar_date': {
+                    'type': 'string',
+                    'description': '农历月日文本，如 十月十二、正月十五、腊月廿八、闰六月十五',
+                },
+                'lunar_month': {'type': 'integer', 'description': '农历月份 1-12'},
+                'lunar_day': {'type': 'integer', 'description': '农历日期 1-30'},
+                'lunar_leap': {'type': 'boolean', 'description': '是否闰月'},
+                'start_year': {'type': 'integer', 'description': '可选起始年份（如出生年 2014 或结婚年 2015，用于计算周岁/周年）'},
+                'category': {
+                    'type': 'string',
+                    'enum': ['exam', 'birthday', 'anniv', 'life'],
+                    'description': '分类：exam(考试日程)/birthday(生日)/anniv(纪念日)/life(生活纪念)',
+                },
+                'pinned': {'type': 'boolean', 'description': '是否置顶到屏幕主页'},
+                'open_ui': {'type': 'boolean', 'description': '同时在屏幕上打开倒数日页面时填 true'},
+            },
+            'required': ['action'],
+        },
+    },
 ]
 _MY_TOOLS = ('self.music.play', 'self.music.control', 'self.music.sleep_timer', 'self.study.focus', 'self.music.ambient', 'self.home.timer',
-             'self.home.message', 'self.home.reminder', 'self.server.status')
+             'self.home.message', 'self.home.reminder', 'self.home.countdown', 'self.server.status')
 
 
 def _sleep_body(args_: dict) -> dict:
@@ -673,6 +724,53 @@ def _call_home_reminder(args_: dict) -> str:
     return _post_home_tool(body)
 
 
+def _call_home_countdown(args_: dict) -> str:
+    act_raw = str(args_.get('action') or 'list').strip().lower()
+    act_map = {
+        '查看': 'list', '列表': 'list', '查询': 'query', '查': 'query',
+        '添加': 'add', '新增': 'add', '新建': 'add', '记': 'add',
+        '删除': 'delete', '取消': 'delete', '移除': 'delete',
+        '置顶': 'pin', '取消置顶': 'unpin',
+        '打开': 'open', '打开页面': 'open',
+    }
+    act = act_map.get(act_raw, act_raw)
+    body = {'action': act}
+    for k in ('title', 'keyword', 'kind', 'date', 'lunar_date', 'category', 'who'):
+        if isinstance(args_.get(k), str) and args_[k].strip():
+            body[k] = args_[k].strip()[:40]
+    for ik in ('month', 'day', 'lunar_month', 'lunar_day', 'start_year'):
+        v = args_.get(ik)
+        if v is not None and not isinstance(v, bool):
+            try:
+                body[ik] = int(v)
+            except (TypeError, ValueError):
+                pass
+    for bk in ('lunar_leap', 'pinned', 'open_ui', 'repeat'):
+        if bk in args_ and isinstance(args_.get(bk), bool):
+            body[bk] = args_[bk]
+    q_txt = f"{body.get('title', '')} {body.get('keyword', '')}"
+    if act in ('list', 'query') and any(k in q_txt for k in ('打开', '看页面', '看看倒数日', '调出', '切到')):
+        body['open_ui'] = True
+    req = urllib.request.Request(
+        'http://127.0.0.1:8095/api/home/countdowns/tool',
+        data=json.dumps(body).encode('utf-8'),
+        headers={'Content-Type': 'application/json', 'Host': '127.0.0.1:8095', 'X-TS-Internal': '1'},
+        method='POST',
+    )
+    try:
+        with _NO_PROXY_OPENER.open(req, timeout=8) as r:
+            data = json.loads(r.read(65536).decode('utf-8', errors='replace'))
+    except urllib.error.HTTPError as e:
+        try:
+            detail = e.read(4096).decode('utf-8', errors='replace').strip()
+        finally:
+            e.close()
+        raise RuntimeError(detail or str(e)) from None
+    if not isinstance(data, dict):
+        raise RuntimeError('倒数日服务没有回应')
+    return str(data.get('text') or ('好的' if data.get('ok') else '没有办成'))
+
+
 _SERVER_OPEN_KW = ('打开', '看面板', '看看面板', '看波形', '波形图', '看详情', '切到', '切屏', '调出', '大盘', '显示面板', '展开面板', '弹出来', '点开')
 
 
@@ -799,6 +897,8 @@ def _install_mcp_hook(mcp_mod) -> None:
                     txt = await loop.run_in_executor(None, _call_home_message, args_)
                 elif name == 'self.home.reminder':
                     txt = await loop.run_in_executor(None, _call_home_reminder, args_)
+                elif name == 'self.home.countdown':
+                    txt = await loop.run_in_executor(None, _call_home_countdown, args_)
                 elif name == 'self.server.status':
                     txt = await loop.run_in_executor(None, _call_server_status, args_)
                 else:

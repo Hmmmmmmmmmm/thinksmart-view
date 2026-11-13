@@ -15,6 +15,7 @@ Optimizations included:
 """
 
 import asyncio
+import gc
 import io
 import json
 import logging
@@ -92,6 +93,10 @@ MLX_CACHE_LIMIT_MB = int(os.environ.get("MLX_CACHE_LIMIT_MB", "1024"))
 if MLX_CACHE_LIMIT_MB >= 0:
     mx.set_cache_limit(MLX_CACHE_LIMIT_MB * 1024 * 1024)
 TTS_OVERFLOW_URL = os.environ.get("TTS_OVERFLOW_URL", "").rstrip("/")
+# Secondary TTS worker (ASR_DISABLED=1) unloads MLX weights after idle timeout so it sits <120 MB
+# until an overflow burst wakes it; primary (:8010) defaults to 0 (always resident).
+TTS_IDLE_SLEEP_SECONDS = int(os.environ.get("TTS_IDLE_SLEEP_SECONDS", "600" if ASR_DISABLED else "0"))
+MAX_ASR_UPLOAD_BYTES = int(os.environ.get("MAX_ASR_UPLOAD_BYTES", str(25 * 1024 * 1024)))
 ASR_CONTEXT_FILE = Path(os.environ.get("ASR_CONTEXT_FILE", str(BASE_DIR / "asr_context.txt")))
 _asr_context_cache = {"mtime": None, "text": ""}
 
@@ -147,11 +152,16 @@ VOICE_ALIASES = {
 
 _gpu_lock = threading.Lock()
 _tts_session_lock = threading.Lock()
+_tts_lifecycle_lock = threading.Lock()
 
 _asr_model = None
 _translation_asr_model = None
 _tts_model = None
+_tts_sleeping: bool = False
 _voice_bank: Dict[str, dict] = {}
+_cached_supported_languages: List[str] = []
+_cached_sample_rate: int = TTS_SAMPLE_RATE
+_cached_speakers_meta: Dict[str, dict] = {}
 _voice_rotation_state: Dict[str, int] = {"xiaohe": 1, "vivi": 1} if ASR_DISABLED else {}
 _last_variant_used: Dict[str, str] = {}
 _spk_embed_cache: Dict[Tuple[int, float], mx.array] = {}
@@ -163,7 +173,7 @@ _keepwarm_arrays: List[mx.array] = []
 
 TAG_CLEAN_RE = re.compile(r"<\|[^|>]+?\|>")
 PRONOUNCEABLE_RE = re.compile(r"[\w\u4e00-\u9fff\u3040-\u30ff\uac00-\ud7af]", re.UNICODE)
-END_PUNCT_RE = re.compile(r"[。！？!?…~～.；;]$")
+END_PUNCT_RE = re.compile(r"[。！？!?…~～.；;]['\"”’」』）》】\]\)]*$")
 QUESTION_CUE_RE = re.compile(
     r"(吗|呢|么|啥|什么|怎么|咋样|怎么样|好不好|行不行|对不对|是不是|要不要|可不可以|能不能|哪只|哪个|哪里|哪儿|几|多少|为什么)[呀啊哦呢吗吧啦]*$"
 )
@@ -256,7 +266,7 @@ def _infer_tts_language(text: str, language: str = "auto") -> str:
         cand = "english"
     else:
         return "auto"
-    supported = getattr(_tts_model, "supported_languages", None) or ()
+    supported = getattr(_tts_model, "supported_languages", None) or _cached_supported_languages or ()
     return cand if (not supported or cand in supported) else "auto"
 
 
@@ -441,6 +451,8 @@ def _stream_tts_pcm_chunks(
     try:
         if cancel_event is not None and cancel_event.is_set():
             return
+        if _tts_sleeping or _tts_model is None:
+            _ensure_tts_awake()
         voice_id, variant = _select_voice_variant(voice or DEFAULT_VOICE, clean_text, translation)
         with _gpu_lock:
             _tts_model._current_soft_max_tokens = soft_tokens
@@ -498,6 +510,7 @@ def _stream_tts_pcm_chunks(
                     elapsed_abort,
                 )
     finally:
+        _last_inference_time = time.time()
         _tts_session_lock.release()
 
     if total_bytes == 0:
@@ -684,7 +697,7 @@ def _touch_mlx_weights_once() -> float:
     pages stay marked active and never suffer 5-8s swap-in stalls after idle periods.
     """
     global _last_keepwarm_time, _keepwarm_count
-    if _tts_session_lock.locked():
+    if _tts_sleeping or _tts_session_lock.locked():
         return -1.0
     t0 = time.perf_counter()
     arrays = _keepwarm_arrays or _collect_keepwarm_arrays()
@@ -771,16 +784,184 @@ def _rotate_launchd_logs_if_needed(max_bytes: int = LOG_ROTATE_MAX_BYTES) -> Non
             logger.warning("Log rotation skipped for %s: %s", name, exc)
 
 
+def _load_tts_and_voices_locked(run_decode_warmup: bool = False) -> int:
+    """Load Qwen3-TTS weights, voice bank, and pre-compile ICL primers under _tts_lifecycle_lock."""
+    global _tts_model, _voice_bank, _keepwarm_arrays, _tts_sleeping
+    global _cached_supported_languages, _cached_sample_rate, _cached_speakers_meta
+    logger.info("Loading Voice-Cloning TTS model from %s ...", TTS_MODEL_DIR)
+    model = load_tts_model(str(TTS_MODEL_DIR))
+
+    orig_extract = model.extract_speaker_embedding
+
+    def cached_extract_speaker_embedding(audio: mx.array) -> mx.array:
+        key = (audio.size, float(audio.sum()))
+        if key not in _spk_embed_cache:
+            emb = orig_extract(audio)
+            mx.eval(emb)
+            _spk_embed_cache[key] = emb
+        return _spk_embed_cache[key]
+
+    model.extract_speaker_embedding = cached_extract_speaker_embedding
+
+    # TTS_SPEEDUPS=0 falls back to the stock mlx-audio generation loop
+    tts_speedups_on = os.environ.get("TTS_SPEEDUPS", "1") == "1" and tts_speedups.install(model)
+
+    voices_json_path = VOICES_DIR / "voices.json"
+    with open(voices_json_path, "r", encoding="utf-8") as f:
+        voices_cfg = json.load(f)
+
+    new_voice_bank: Dict[str, dict] = {}
+    total_variants = 0
+    for vid, vinfo in voices_cfg.items():
+        raw_variants = vinfo.get("variants") or [
+            {"style": "default", "audio": vinfo["audio"], "text": vinfo["text"]}
+        ]
+        loaded_variants = []
+        for var in raw_variants:
+            wav_path = VOICES_DIR / var["audio"]
+            raw_audio_mx = load_audio(str(wav_path), sample_rate=model.sample_rate)
+            audio_mx = _trim_reference_audio(raw_audio_mx, sample_rate=model.sample_rate)
+            mx.eval(audio_mx)
+            loaded_variants.append(
+                {
+                    "style": var.get("style", "default"),
+                    "audio_path": str(wav_path),
+                    "audio_mx": audio_mx,
+                    "text": var["text"],
+                }
+            )
+            total_variants += 1
+
+        new_voice_bank[vid.lower()] = {
+            "name": vinfo.get("name", vid),
+            "variants": loaded_variants,
+        }
+
+    logger.info(
+        "Pre-caching %d ICL style variants across voices %s ...",
+        total_variants,
+        list(new_voice_bank.keys()),
+    )
+    for vid, vdata in new_voice_bank.items():
+        for var in vdata["variants"]:
+            with _gpu_lock:
+                model._prepare_icl_generation_inputs(
+                    text="你好。",
+                    ref_audio=var["audio_mx"],
+                    ref_text=var["text"],
+                    language="chinese",
+                )
+                if tts_speedups_on:
+                    tts_speedups.warm_primer(model, var["audio_mx"], var["text"], language="chinese")
+
+    _tts_model = model
+    _voice_bank = new_voice_bank
+    _cached_supported_languages = list(getattr(model, "supported_languages", []) or [])
+    _cached_sample_rate = int(getattr(model, "sample_rate", TTS_SAMPLE_RATE))
+    _cached_speakers_meta = {
+        k: {
+            "name": v["name"],
+            "styles": [x["style"] for x in v["variants"]],
+        }
+        for k, v in new_voice_bank.items()
+    }
+    _tts_sleeping = False
+    _keepwarm_arrays = _collect_keepwarm_arrays()
+
+    if run_decode_warmup:
+        for _ in _stream_tts_pcm_chunks("你好。", voice=DEFAULT_VOICE):
+            pass
+        if tts_speedups_on:
+            # Interpretation samples at a lower temperature, which is a separate compiled graph
+            for _ in _stream_tts_pcm_chunks("Hello.", voice=DEFAULT_VOICE, language="english", translation=True):
+                pass
+        _keepwarm_arrays = _collect_keepwarm_arrays()
+    return total_variants
+
+
+def _ensure_tts_awake() -> None:
+    """Wake sleeping secondary TTS worker on demand before serving a synthesis request."""
+    global _last_inference_time
+    if _tts_model is not None and not _tts_sleeping:
+        return
+    with _tts_lifecycle_lock:
+        if _tts_model is not None and not _tts_sleeping:
+            return
+        t0 = time.perf_counter()
+        _spk_embed_cache.clear()
+        total_variants = _load_tts_and_voices_locked(run_decode_warmup=False)
+        _last_inference_time = time.time()
+        logger.info(
+            "TTS worker woke from idle sleep in %.2fs (%d variants, MLX active=%.1f MB)",
+            time.perf_counter() - t0,
+            total_variants,
+            mx.get_active_memory() / 2**20,
+        )
+
+
+def _maybe_sleep_tts_worker(idle_sec: float) -> bool:
+    """Unload TTS weights and Metal cache on TTS-only worker after idle timeout."""
+    global _tts_model, _voice_bank, _keepwarm_arrays, _tts_sleeping
+    if TTS_IDLE_SLEEP_SECONDS <= 0 or not ASR_DISABLED:
+        return False
+    with _tts_lifecycle_lock:
+        if _tts_sleeping or _tts_model is None:
+            return False
+        if not _tts_session_lock.acquire(blocking=False):
+            return False
+        try:
+            if not _gpu_lock.acquire(timeout=0.1):
+                return False
+            try:
+                cur_idle = time.time() - max(_last_inference_time, _startup_time)
+                if cur_idle < TTS_IDLE_SLEEP_SECONDS:
+                    return False
+                _keepwarm_arrays = []
+                _spk_embed_cache.clear()
+                _voice_bank = {}
+                _tts_model = None
+                _tts_sleeping = True
+                gc.collect()
+                mx.clear_cache()
+            finally:
+                _gpu_lock.release()
+        finally:
+            _tts_session_lock.release()
+    logger.info(
+        "TTS worker entered idle sleep after %.0fs idle (MLX active=%.1f MB, cache=%.1f MB)",
+        idle_sec,
+        mx.get_active_memory() / 2**20,
+        mx.get_cache_memory() / 2**20,
+    )
+    return True
+
+
 async def _mlx_memory_keepwarm_loop():
-    """Run lightweight Metal page keep-warm every 8 minutes when on AC power and idle >= 5 minutes."""
-    if ASR_DISABLED:
-        # Stagger secondary TTS worker (:8011) by 4 minutes so :8010 and :8011 never contend on Metal GPU
+    """Run lightweight Metal page keep-warm every 8 minutes, or sleep TTS-only worker after idle timeout."""
+    idle_sleep_mode = ASR_DISABLED and TTS_IDLE_SLEEP_SECONDS > 0
+    tick_sec = max(1, min(60, TTS_IDLE_SLEEP_SECONDS // 2)) if idle_sleep_mode else 480
+    last_log_rotate = time.time()
+    if ASR_DISABLED and not idle_sleep_mode:
+        # Stagger resident secondary TTS worker (:8011) by 4 minutes so :8010 and :8011 never contend on Metal GPU
         await asyncio.sleep(240)
     while True:
         try:
-            await asyncio.sleep(480)
-            await asyncio.to_thread(_rotate_launchd_logs_if_needed)
-            idle_sec = time.time() - max(_last_inference_time, _last_keepwarm_time, _startup_time)
+            await asyncio.sleep(tick_sec)
+            now = time.time()
+            if not idle_sleep_mode or (now - last_log_rotate) >= 480:
+                await asyncio.to_thread(_rotate_launchd_logs_if_needed)
+                last_log_rotate = now
+            if idle_sleep_mode:
+                tts_idle_sec = now - max(_last_inference_time, _startup_time)
+                if (
+                    not _tts_sleeping
+                    and _tts_model is not None
+                    and tts_idle_sec >= TTS_IDLE_SLEEP_SECONDS
+                    and not _tts_session_lock.locked()
+                ):
+                    await asyncio.to_thread(_maybe_sleep_tts_worker, tts_idle_sec)
+                continue
+            idle_sec = now - max(_last_inference_time, _last_keepwarm_time, _startup_time)
             if idle_sec < 280 or _tts_session_lock.locked() or not _is_on_ac_power():
                 continue
             dt_ms = await asyncio.to_thread(_touch_mlx_weights_once)
@@ -818,98 +999,29 @@ async def lifespan(app: FastAPI):
         logger.info("Loading interpretation ASR model from %s ...", TRANSLATION_ASR_MODEL_DIR)
         _translation_asr_model = load_stt_model(str(TRANSLATION_ASR_MODEL_DIR))
 
-    logger.info("Loading Voice-Cloning TTS model from %s ...", TTS_MODEL_DIR)
-    _tts_model = load_tts_model(str(TTS_MODEL_DIR))
+    if _asr_model is not None or _translation_asr_model is not None:
+        dummy_audio = np.zeros(8000, dtype=np.float32)
+        with _gpu_lock:
+            if _asr_model is not None:
+                _asr_model.generate(dummy_audio, language="zh", use_itn=True)
+            if _translation_asr_model is not None:
+                _translation_asr_model.generate(dummy_audio, language=None, max_tokens=8, temperature=0)
 
-    orig_extract = _tts_model.extract_speaker_embedding
-
-    def cached_extract_speaker_embedding(audio: mx.array) -> mx.array:
-        key = (audio.size, float(audio.sum()))
-        if key not in _spk_embed_cache:
-            emb = orig_extract(audio)
-            mx.eval(emb)
-            _spk_embed_cache[key] = emb
-        return _spk_embed_cache[key]
-
-    _tts_model.extract_speaker_embedding = cached_extract_speaker_embedding
-
-    # TTS_SPEEDUPS=0 falls back to the stock mlx-audio generation loop
-    tts_speedups_on = os.environ.get("TTS_SPEEDUPS", "1") == "1" and tts_speedups.install(_tts_model)
-
-    voices_json_path = VOICES_DIR / "voices.json"
-    with open(voices_json_path, "r", encoding="utf-8") as f:
-        voices_cfg = json.load(f)
-
-    total_variants = 0
-    for vid, vinfo in voices_cfg.items():
-        raw_variants = vinfo.get("variants") or [
-            {"style": "default", "audio": vinfo["audio"], "text": vinfo["text"]}
-        ]
-        loaded_variants = []
-        for var in raw_variants:
-            wav_path = VOICES_DIR / var["audio"]
-            raw_audio_mx = load_audio(str(wav_path), sample_rate=_tts_model.sample_rate)
-            audio_mx = _trim_reference_audio(raw_audio_mx, sample_rate=_tts_model.sample_rate)
-            mx.eval(audio_mx)
-            loaded_variants.append(
-                {
-                    "style": var.get("style", "default"),
-                    "audio_path": str(wav_path),
-                    "audio_mx": audio_mx,
-                    "text": var["text"],
-                }
-            )
-            total_variants += 1
-
-        _voice_bank[vid.lower()] = {
-            "name": vinfo.get("name", vid),
-            "variants": loaded_variants,
-        }
-
-    logger.info(
-        "Pre-caching %d ICL style variants across voices %s ...",
-        total_variants,
-        list(_voice_bank.keys()),
-    )
-    dummy_audio = np.zeros(8000, dtype=np.float32)
-    with _gpu_lock:
-        if _asr_model is not None:
-            _asr_model.generate(dummy_audio, language="zh", use_itn=True)
-        if _translation_asr_model is not None:
-            _translation_asr_model.generate(dummy_audio, language=None, max_tokens=8, temperature=0)
-
-    for vid, vdata in _voice_bank.items():
-        for var in vdata["variants"]:
-            with _gpu_lock:
-                _tts_model._prepare_icl_generation_inputs(
-                    text="你好。",
-                    ref_audio=var["audio_mx"],
-                    ref_text=var["text"],
-                    language="chinese",
-                )
-                if tts_speedups_on:
-                    tts_speedups.warm_primer(_tts_model, var["audio_mx"], var["text"], language="chinese")
-
-    for _ in _stream_tts_pcm_chunks("你好。", voice=DEFAULT_VOICE):
-        pass
-    if tts_speedups_on:
-        # Interpretation samples at a lower temperature, which is a separate compiled graph
-        for _ in _stream_tts_pcm_chunks("Hello.", voice=DEFAULT_VOICE, language="english", translation=True):
-            pass
+    with _tts_lifecycle_lock:
+        total_variants = _load_tts_and_voices_locked(run_decode_warmup=True)
 
     _startup_time = time.time()
     _last_inference_time = _startup_time
     logging.getLogger("uvicorn.access").addFilter(_HealthCheckAccessFilter())
-    _keepwarm_arrays = _collect_keepwarm_arrays()
     if not ASR_DISABLED:
         # 1.5 s of a real voice reference: zeros would let the decoders stop after a token or two
         _keepwarm_clip = load_audio(str(VOICES_DIR / "xiaohe_flow1.wav"), sample_rate=16000)[:24000]
         mx.eval(_keepwarm_clip)
         logger.info("ASR keep-warm decode at startup in %.0fms", _warm_asr_once())
-    kw_init_ms = _touch_mlx_weights_once()
+    kw_init_ms = _touch_mlx_weights_once() if not (ASR_DISABLED and TTS_IDLE_SLEEP_SECONDS > 0) else 0.0
     keepwarm_task = asyncio.create_task(_mlx_memory_keepwarm_loop())
     logger.info(
-        "Voice server ready in %.2fs! (ASR=%s, TTS=%s, Voices=%s, Variants=%d, KeepWarmTensors=%d in %.1fms)",
+        "Voice server ready in %.2fs! (ASR=%s, TTS=%s, Voices=%s, Variants=%d, KeepWarmTensors=%d in %.1fms, IdleSleep=%ds)",
         time.perf_counter() - t_start,
         "none (TTS-only worker)" if ASR_DISABLED else "SenseVoiceSmall" if _asr_model is not None else "Qwen3-ASR-1.7B only",
         TTS_MODEL_DIR.name,
@@ -917,11 +1029,17 @@ async def lifespan(app: FastAPI):
         total_variants,
         len(_keepwarm_arrays),
         kw_init_ms,
+        TTS_IDLE_SLEEP_SECONDS if ASR_DISABLED else 0,
     )
     try:
         yield
     finally:
         keepwarm_task.cancel()
+        if _overflow_client is not None:
+            try:
+                await _overflow_client.aclose()
+            except Exception:
+                pass
 
 
 app = FastAPI(
@@ -962,20 +1080,26 @@ async def health():
         "translation_asr_model": "Qwen3-ASR-1.7B",
         "translation_asr_languages": sorted(TRANSLATION_ASR_LANGUAGES),
         "tts_model": TTS_MODEL_DIR.name,
-        "sample_rate": getattr(_tts_model, "sample_rate", TTS_SAMPLE_RATE),
+        "sample_rate": getattr(_tts_model, "sample_rate", _cached_sample_rate),
         "default_voice": DEFAULT_VOICE,
-        "speakers": {
-            k: {
-                "name": v["name"],
-                "styles": [x["style"] for x in v["variants"]],
+        "speakers": (
+            {
+                k: {
+                    "name": v["name"],
+                    "styles": [x["style"] for x in v["variants"]],
+                }
+                for k, v in _voice_bank.items()
             }
-            for k, v in _voice_bank.items()
-        },
+            if _voice_bank
+            else _cached_speakers_meta
+        ),
         "active_memory_gb": round(mx.get_active_memory() / 1e9, 2),
         "asr_languages": sorted(ASR_LANGUAGES),
-        "tts_languages": getattr(_tts_model, "supported_languages", []),
+        "tts_languages": list(getattr(_tts_model, "supported_languages", _cached_supported_languages)),
         "translation_streaming_interval": TRANSLATION_STREAMING_INTERVAL,
         "tts_busy": _tts_session_lock.locked(),
+        "tts_sleeping": _tts_sleeping,
+        "tts_idle_sleep_seconds": TTS_IDLE_SLEEP_SECONDS if ASR_DISABLED else 0,
         "keepwarm_tensors": len(_keepwarm_arrays),
         "keepwarm_count": _keepwarm_count,
         "last_keepwarm_age_s": round(time.time() - _last_keepwarm_time, 1) if _last_keepwarm_time else None,
@@ -1015,7 +1139,20 @@ async def create_transcription(
     if language not in supported_languages:
         raise HTTPException(status_code=400, detail="Unsupported ASR language")
     suffix = Path(file.filename or "audio.wav").suffix or ".wav"
-    content = await file.read()
+    chunks: List[bytes] = []
+    total_read = 0
+    while True:
+        chunk = await file.read(1024 * 1024)
+        if not chunk:
+            break
+        total_read += len(chunk)
+        if total_read > MAX_ASR_UPLOAD_BYTES:
+            raise HTTPException(
+                status_code=413,
+                detail=f"Audio upload exceeds {MAX_ASR_UPLOAD_BYTES} bytes",
+            )
+        chunks.append(chunk)
+    content = b"".join(chunks)
     if not content:
         if response_format == "text":
             return PlainTextResponse("")
@@ -1087,8 +1224,11 @@ async def xiaozhi_index_stream_tts(req: IndexStreamTTSRequest):
     voice = req.character or req.voice or DEFAULT_VOICE
     lang_key = (req.language or "auto").strip().lower().replace("_", "-").split("-", 1)[0]
     language = LANGUAGE_NAMES.get(lang_key, lang_key)
-    if language not in _tts_model.supported_languages:
+    supported_langs = getattr(_tts_model, "supported_languages", None) or _cached_supported_languages
+    if supported_langs and language not in supported_langs:
         raise HTTPException(status_code=400, detail="Unsupported TTS language")
+    if _tts_sleeping or _tts_model is None:
+        await asyncio.to_thread(_ensure_tts_awake)
     return StreamingResponse(
         _async_tts_pcm_chunks(
             text=req.text,
@@ -1109,8 +1249,11 @@ async def openai_speech(req: OpenAISpeechRequest):
         raise HTTPException(status_code=400, detail="Supported audio formats: pcm, wav")
     lang_key = (req.language or "auto").strip().lower().replace("_", "-").split("-", 1)[0]
     language = LANGUAGE_NAMES.get(lang_key, lang_key)
-    if language not in _tts_model.supported_languages:
+    supported_langs = getattr(_tts_model, "supported_languages", None) or _cached_supported_languages
+    if supported_langs and language not in supported_langs:
         raise HTTPException(status_code=400, detail="Unsupported TTS language")
+    if _tts_sleeping or _tts_model is None:
+        await asyncio.to_thread(_ensure_tts_awake)
     if fmt == "pcm":
         return StreamingResponse(
             _async_tts_pcm_chunks(
@@ -1162,6 +1305,12 @@ async def _relay_openai_v1(target_base_url: str, subpath: str, request: Request)
         except urllib.error.HTTPError as e:
             err_body = e.read()
             return Response(content=err_body, status_code=e.code, media_type="application/json")
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            return Response(
+                content=json.dumps({"error": {"message": f"Upstream relay error: {e}", "type": "bad_gateway"}}),
+                status_code=502,
+                media_type="application/json",
+            )
 
         def _stream_lines():
             try:
@@ -1181,6 +1330,12 @@ async def _relay_openai_v1(target_base_url: str, subpath: str, request: Request)
                 return resp.status, resp.read(), resp.headers.get("Content-Type", "application/json")
         except urllib.error.HTTPError as e:
             return e.code, e.read(), "application/json"
+        except (urllib.error.URLError, TimeoutError, OSError) as e:
+            return (
+                502,
+                json.dumps({"error": {"message": f"Upstream relay error: {e}", "type": "bad_gateway"}}).encode(),
+                "application/json",
+            )
 
     status, raw, ctype = await asyncio.to_thread(_call_upstream)
     return Response(content=raw, status_code=status, media_type=ctype)

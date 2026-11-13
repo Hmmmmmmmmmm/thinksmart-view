@@ -1251,7 +1251,9 @@ class Companion:
             if duck_state[0]:
                 duck_state[0] = False
                 if not self.stopping:
-                    asyncio.create_task(self.music('unduck'))
+                    ut = asyncio.create_task(self.music('unduck'))
+                    self.announcements.add(ut)
+                    ut.add_done_callback(self.announcements.discard)
             if not task.cancelled():
                 with contextlib.suppress(Exception):
                     task.result()
@@ -2019,4 +2021,7 @@ if __name__ == '__main__':
     lan = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     lan.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
     lan.bind(('0.0.0.0', PARENT_PORT))
-    web.run_app(app_for(Companion()), host='127.0.0.1', port=PORT, sock=lan, access_log=None, print=None)
+    try:
+        web.run_app(app_for(Companion()), host='127.0.0.1', port=PORT, sock=lan, access_log=None, print=None)
+    finally:
+        lan.close()
