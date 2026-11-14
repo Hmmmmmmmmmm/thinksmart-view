@@ -24,8 +24,6 @@ import json
 import os
 import contextlib
 import shutil
-import threading
-import time
 import subprocess
 import tempfile
 import threading
@@ -198,6 +196,8 @@ class Handler(BaseHTTPRequestHandler):
 
     def do_GET(self):
         _rotate_logs_if_needed()
+        if self.path == "/health":
+            return self._send(200, {"status": "ok", "ok": True})
         if self.path != "/study/health":
             return self._send(404, {"error": "not found"})
         try:
@@ -245,6 +245,10 @@ class Handler(BaseHTTPRequestHandler):
         self._send(200, seal("resp", reply))
 
 
+class _VisionServer(ThreadingHTTPServer):
+    daemon_threads = True
+
+
 if __name__ == "__main__":
     _rotate_logs_if_needed(force=True)
-    ThreadingHTTPServer(("127.0.0.1", PORT), Handler).serve_forever()
+    _VisionServer(("127.0.0.1", PORT), Handler).serve_forever()

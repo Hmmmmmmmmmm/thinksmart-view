@@ -97,6 +97,12 @@ else
   warn "缺少 /etc/wireplumber/scripts/suspend-node.lua（唤醒提示音可能因功放冷启动 546ms 而无声）"
 fi
 
+if [ -f /opt/thinksmart-addons/xiaozhi-hub-overrides/sitecustomize.py ] && [ -d /opt/thinksmart-addons/xiaozhi-hub-overrides/files ]; then
+  pass "已安装 xiaozhi-hub-overrides 模块覆盖目录 (/opt/thinksmart-addons/xiaozhi-hub-overrides/files)"
+else
+  warn "缺少 /opt/thinksmart-addons/xiaozhi-hub-overrides/files（本地音乐播控与 64kbps 语音增强覆盖不会生效）"
+fi
+
 echo ""
 echo "诊断结果：$FAIL 个错误，$WARN 个警告。"
 [ "$FAIL" -eq 0 ]

@@ -28,6 +28,12 @@ USER_BRIGHTNESS_PATH = Path("/run/user/1000/user_brightness")
 LEGACY_USER_BRIGHTNESS_PATH = Path("/tmp/user_brightness")
 HINT_PATH = Path("/run/user/1000/thinksmart-screen.json")
 MODE_PATH = Path("/var/lib/thinksmart-monitor/display.json")
+_DEFAULT_RUNTIME_DIR = Path("/run/user/1000")
+NIGHT_FROM, NIGHT_TO = (0, 0), (6, 30)
+NIGHT_LEVEL = 1400
+NIGHT_VIEW_PATH = Path("/run/user/1000/thinksmart-night-view")
+SUNRISE_PATH = Path("/run/user/1000/thinksmart-sunrise.json")
+NIGHT_TEST = False
 MIRROR_FLAG_PATH = Path("/run/user/1000/uxplay-mirroring-active")
 INTERCOM_FLAG_PATH = Path("/run/user/1000/intercom-call-active")
 SLEEP_DIM_BRIGHTNESS = 1600
@@ -66,7 +72,38 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-def read_wake_brightness() -> int:
+def _num(v) -> bool:
+    return type(v) in (int, float) and math.isfinite(v)
+
+
+def should_wake_night_low(now=None) -> bool:
+    if HINT_PATH.parent != _DEFAULT_RUNTIME_DIR and not NIGHT_TEST:
+        return False
+    ts = time.time() if now is None else now
+    try:
+        sr = json.loads(SUNRISE_PATH.read_text())
+        if isinstance(sr, dict) and "stopped" not in sr:
+            st, ramp, hold = sr.get("start"), sr.get("ramp"), sr.get("hold")
+            if (_num(st) and _num(ramp) and _num(hold)
+                    and 0 < ramp <= 3600 and 0 <= hold <= 7200
+                    and st <= ts < st + ramp + hold):
+                return False
+    except Exception:
+        pass
+    try:
+        nv = json.loads(NIGHT_VIEW_PATH.read_text())
+        if isinstance(nv, dict) and _num(nv.get("until")) and ts < nv["until"]:
+            return True
+    except Exception:
+        pass
+    lt = time.localtime(ts)
+    hm = (lt.tm_hour, lt.tm_min)
+    return NIGHT_FROM <= hm < NIGHT_TO if NIGHT_FROM <= NIGHT_TO else (hm >= NIGHT_FROM or hm < NIGHT_TO)
+
+
+def read_wake_brightness(now=None) -> int:
+    if should_wake_night_low(now):
+        return NIGHT_LEVEL
     hint, mode = {}, {}
     try:
         h = json.loads(HINT_PATH.read_text())

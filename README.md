@@ -63,8 +63,8 @@ flowchart LR
 | [`device/intercom/`](device/intercom/) | `thinksmart-intercom.py` (`:18091`) | **远程双向可视对讲**：点亮机身 S5KC505A 摄像头，联动物理镜头盖 (`gpio87`) 与麦克风静音键 (`gpio86`)，读取 `BMA253` 重力传感器自动扶正 `0°/90°/180°/270°` 画面，支持手机网页省流模式、现场监听、全双工视频通话、家庭留言板远程收发及**手机端倒数日/公农历生日在线管理**。 |
 | [`device/study/`](device/study/) | `thinksmart-study.py` (`:8093` / `:8094`) | **AI 学习坐姿与专注陪伴**：手动开启（带 3 小时自动关闭安全锁），每分钟 3 张跨 8 秒连拍过滤瞬间动作，经 **SHAKE256 + HMAC-SHA256 端到端加密**送交本地视觉模型判断坐姿/趴桌/走神/玩手机，连续命中后用自然克隆童声/女声温和提醒（自动避让通话/投屏并暂停恢复背景音乐）；内置响应式手机/电脑家长统计页（只存脱敏文字结果，零照片落盘）。 |
 | [`device/system/`](device/system/) | `idle-blanker.py` / `thinksmart-airplay.py` 等 | **底层电源、显示、投屏与外设守护**：环境光对数曲线平滑调光（夜间最低可至 `0%`）、息屏 `SIGSTOP` 冻结 `WebKitWebProcess` 实现息屏应用 `0%` CPU、Adreno GPU 恢复看门狗、AirPlay 镜像时期 CPU/GPU 绑核提权与 Wayland 自动重连、底部 Type-C 接口 USB Host 热插拔自动挂载。 |
-| [`device/xiaozhi-overrides/`](device/xiaozhi-overrides/) | `sitecustomize.py` + `local-changes.patch` | **小智 Hub 无侵入热补丁加载器**：启动时校验官方文件 Git Blob SHA，匹配时才挂载 `64kbps` 全频带 Opus 高音质编码与流式 TTS 增强，上游更新后自动回退官方模块，保证零启动故障。 |
-| [`device/configs/`](device/configs/) | `systemd` / `pipewire` / `wireplumber` / `udev` | **全链路 Hi-Fi 音频与系统加固配置**：PipeWire `48kHz` 原生时钟 + `resample.quality=10` (256-tap sinc) + `wannamaker3` 心理声学抖动、蓝牙 A2DP 直通高清配置、内核网络缓冲与安全加固参数。 |
+| [`device/xiaozhi-overrides/`](device/xiaozhi-overrides/) | `sitecustomize.py` + `files/` | **小智 Hub 无侵入热补丁加载器**：启动时逐文件校验官方 Git Blob SHA，匹配时才挂载 `64kbps` 全频带 Opus 高音质编码、流式 TTS 增强、QQ 音乐语音桥接与管理后台鉴权/SSRF 加固（共 21 个模块），上游更新后自动回退官方模块，保证零启动故障。 |
+| [`device/configs/`](device/configs/) | `systemd` / `journald` / `pipewire` / `wireplumber` / `udev` | **全链路 Hi-Fi 音频与系统加固配置**：PipeWire `48kHz` 原生时钟 + `resample.quality=10` (256-tap sinc) + `wannamaker3` 心理声学抖动、蓝牙 A2DP 直通高清配置、`NetworkManager-wait-online` 秒级放行、`journald` 闪存限额及内核网络缓冲参数。 |
 | [`device/tests/`](device/tests/) | `test_*.py` | **自动化回归测试集**：覆盖主页、三端倒数日与公农历/闰月换算、多城天气详情、留言板与定时提醒、睡眠唤醒、QQ音乐收藏同步、服务器看板与安全边界校验。 |
 
 ### 2. Apple Silicon 本地算力配套端 (`mac-companion/`)
@@ -134,8 +134,8 @@ sudo bash device/install.sh
    - **关键（勿遗漏）**：将 [`device/qqmusic/aec_bridge_sitecustomize.py`](device/qqmusic/aec_bridge_sitecustomize.py) **重命名**复制为 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py`，并部署 `device/configs/systemd/system/thinksmart-client.service.d/aec-bridge.conf`。
    - 将各前端资源与 [`device/kiosk/*`](device/kiosk/) 复制至 `/usr/local/share/thinksmart-{home,qqmusic,monitor,intercom,study,kiosk}/`。
 3. **系统级与用户级配置（严格区分存放路径）**：
-   - 系统级：`device/configs/systemd/system/*` → `/etc/systemd/system/`；`udev/*` → `/etc/udev/rules.d/`；`sysctl/*` → `/etc/sysctl.d/`；`wireplumber-system/*` → `/etc/wireplumber/`；参考 `device/configs/kiosk/thinksmart-kiosk.conf.example` 配置 `/etc/thinksmart-kiosk.conf`（保持 `URL="http://127.0.0.1:8090/"`）。
-   - 用户级：`device/configs/pipewire/*` → `/home/ubuntu/.config/pipewire/`；`device/configs/wireplumber/*` → `/home/ubuntu/.config/wireplumber/`；`device/configs/systemd/user/*.service` 及 `xiaozhi-hub.service.d/thinksmart-overrides.conf` → `/home/ubuntu/.config/systemd/user/`（`proxy.conf.example` 仅作代理参考模板，按需启用）。
+   - 系统级：`device/configs/systemd/system/*` → `/etc/systemd/system/`；`journald/*` → `/etc/systemd/journald.conf.d/`；`udev/*` → `/etc/udev/rules.d/`；`sysctl/*` → `/etc/sysctl.d/`；`wireplumber-system/*` → `/etc/wireplumber/`；`device/xiaozhi-overrides/{sitecustomize.py,files}` → `/opt/thinksmart-addons/xiaozhi-hub-overrides/`；参考 `device/configs/kiosk/thinksmart-kiosk.conf.example` 配置 `/etc/thinksmart-kiosk.conf`（保持 `URL="http://127.0.0.1:8090/"`）。
+   - 用户级：`device/configs/pipewire/*` → `/home/ubuntu/.config/pipewire/`；`device/configs/wireplumber/*` → `/home/ubuntu/.config/wireplumber/`；`device/configs/systemd/user/*.service`、`{idle-blanker,thinksmart-mic}.service.d/override.conf` 及 `xiaozhi-hub.service.d/thinksmart-overrides.conf` → `/home/ubuntu/.config/systemd/user/`（`proxy.conf.example` 仅作代理参考模板，按需启用）。
 
 ---
 

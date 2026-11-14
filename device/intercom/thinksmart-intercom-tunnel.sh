@@ -1,16 +1,20 @@
 #!/bin/bash
 umask 077
 # Connect directly via SSH -N -T first (lowest latency, zero proxy hairpin, works even if local proxy is stopped),
-# with automatic failover to local :1080 SOCKS5 proxy if direct connection fails quickly.
+# with automatic failover to local SOCKS5 proxy if direct connection fails quickly.
 # Forwards both Intercom WebSocket (:18091 -> 127.0.0.1:18091) and Device SSH (:22 -> 127.0.0.1:28022).
 REMOTE_HOST="${INTERCOM_REMOTE_HOST:-root@203.0.113.10}"
 REMOTE_PORT="${INTERCOM_REMOTE_PORT:-22}"
+SOCKS_PROXY="${INTERCOM_SOCKS_PROXY:-127.0.0.1:1080}"
+SOCKS_PORT="${SOCKS_PROXY##*:}"
 ERR_FILE="/run/thinksmart-intercom-tunnel.err"
 UP_FILE="/run/thinksmart-intercom-tunnel.up"
 WATCH_PID=""
 BASE_OPTS=(
     -N -T
     -i /etc/thinksmart-intercom/id_ed25519
+    -o IdentitiesOnly=yes
+    -o BatchMode=yes
     -o StrictHostKeyChecking=yes
     -o UserKnownHostsFile=/etc/thinksmart-intercom/known_hosts
     -o LogLevel=ERROR
@@ -98,14 +102,16 @@ if [ -s "$ERR_FILE" ] && grep -q "remote port forwarding failed" "$ERR_FILE"; th
 fi
 rm -f "$ERR_FILE" 2>/dev/null || true
 
-if ss -tln | grep -Eq ':1080([[:space:]]|$)'; then
+proxy_was_up=0
+if [[ "$SOCKS_PORT" =~ ^[0-9]+$ ]] && ss -tln | grep -Eq ":${SOCKS_PORT}([[:space:]]|\$)"; then
     sleep 1.5
     rm -f "$ERR_FILE" "$UP_FILE" 2>/dev/null || true
-    echo "[intercom-tunnel] Direct SSH exited in ${elapsed}s (rc=${rc}), falling back to local proxy :1080..." >&2
+    echo "[intercom-tunnel] Direct SSH exited in ${elapsed}s (rc=${rc}), falling back to local proxy ${SOCKS_PROXY}..." >&2
+    # Note: OpenSSH prepends "exec " when invoking ProxyCommand via $SHELL -c; never put a leading "exec " here.
     /usr/bin/ssh "${BASE_OPTS[@]}" \
         -o PermitLocalCommand=yes \
         -o LocalCommand="touch $UP_FILE" \
-        -o ProxyCommand="exec nc -w 45 -X 5 -x 127.0.0.1:1080 %h %p" \
+        -o ProxyCommand="nc -w 45 -X 5 -x ${SOCKS_PROXY} %h %p" \
         "$REMOTE_HOST" 2>"$ERR_FILE" &
     SSH_PID=$!
     (
@@ -130,10 +136,19 @@ if ss -tln | grep -Eq ':1080([[:space:]]|$)'; then
         wait "$WATCH_PID" 2>/dev/null || true
         WATCH_PID=""
     fi
+    [ -f "$UP_FILE" ] && proxy_was_up=1
     if [ -s "$ERR_FILE" ]; then
         cat "$ERR_FILE" >&2
     fi
     rm -f "$ERR_FILE" "$UP_FILE" 2>/dev/null || true
+fi
+
+# Prevent rapid restart storms (and sshd MaxStartups / fail2ban blocks) when both direct and proxy fail quickly.
+total_elapsed=$(( $(awk '{print int($1)}' /proc/uptime) - t0 ))
+if [ "$was_up" -eq 0 ] && [ "$proxy_was_up" -eq 0 ] && [ "$total_elapsed" -lt 12 ]; then
+    backoff=$(( 12 - total_elapsed ))
+    echo "[intercom-tunnel] Both paths failed in ${total_elapsed}s; backing off ${backoff}s before retry..." >&2
+    sleep "$backoff"
 fi
 
 exit "$rc"

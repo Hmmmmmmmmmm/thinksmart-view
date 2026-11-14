@@ -421,6 +421,44 @@ class TestStaticAndBridgeInvariants(unittest.TestCase):
         ):
             self.assertIn(tok, ic)
 
+    def test_night_wake_brightness_and_tunnel_proxy_guard(self):
+        sw = _load_mod('ts_sw_test', _asset('/usr/local/bin/screen-wake-daemon.py', 'system/screen-wake-daemon.py'))
+        px = _load_mod('ts_px_test', _asset('/usr/local/bin/vcnl4200-proximity-daemon.py', 'system/vcnl4200-proximity-daemon.py'))
+        night_ts = dt.datetime(2026, 11, 14, 3, 15, 0).timestamp()
+        day_ts = dt.datetime(2026, 11, 14, 13, 30, 0).timestamp()
+        for mod in (sw, px):
+            with tempfile.TemporaryDirectory() as td:
+                root = pathlib.Path(td)
+                mod.HINT_PATH = root / 'hint.json'
+                mod.MODE_PATH = root / 'mode.json'
+                mod.USER_BRIGHTNESS_PATH = root / 'ub'
+                mod.LEGACY_USER_BRIGHTNESS_PATH = root / 'ub_legacy'
+                mod.NIGHT_VIEW_PATH = root / 'night_view'
+                mod.SUNRISE_PATH = root / 'sunrise.json'
+                mod.HINT_PATH.write_text(json.dumps({'brightness': 80}), 'utf-8')
+                mod.USER_BRIGHTNESS_PATH.write_text('3800\n', 'utf-8')
+                # Default NIGHT_TEST=False with isolated HINT_PATH keeps daytime semantics even at 03:15
+                mod.NIGHT_TEST = False
+                self.assertGreater(mod.read_wake_brightness(night_ts), 3000)
+                # Production night rules enabled: 03:15 wakes at NIGHT_LEVEL (1400), 13:30 wakes at user level
+                mod.NIGHT_TEST = True
+                self.assertEqual(mod.read_wake_brightness(night_ts), 1400)
+                self.assertGreater(mod.read_wake_brightness(day_ts), 3000)
+                # Daytime with active sleep night-view wakes at NIGHT_LEVEL (1400)
+                mod.NIGHT_VIEW_PATH.write_text(json.dumps({'until': day_ts + 600}), 'utf-8')
+                self.assertEqual(mod.read_wake_brightness(day_ts), 1400)
+                # Active un-stopped gentle sunrise yields to normal wake brightness instead of forcing 1400
+                mod.SUNRISE_PATH.write_text(json.dumps({'start': night_ts - 60, 'ramp': 600, 'hold': 300}), 'utf-8')
+                self.assertGreater(mod.read_wake_brightness(night_ts), 3000)
+                mod.NIGHT_TEST = False
+
+        tun = _asset('/usr/local/bin/thinksmart-intercom-tunnel.sh', 'intercom/thinksmart-intercom-tunnel.sh').read_text('utf-8')
+        self.assertNotIn('ProxyCommand="exec ', tun)
+        self.assertIn('ProxyCommand="nc -w 45 -X 5 -x ', tun)
+        self.assertIn('-o IdentitiesOnly=yes', tun)
+        self.assertIn('-o BatchMode=yes', tun)
+        self.assertIn('Both paths failed in', tun)
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)

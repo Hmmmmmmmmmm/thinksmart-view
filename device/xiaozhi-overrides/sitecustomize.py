@@ -31,9 +31,6 @@ STATUS_PATH = '/run/user/1000/xiaozhi-hub-overrides.json'
 
 # module -> (git blob of the official file our copy is based on, our copy, what it changes)
 OVERRIDES = {
-    'plugins_func.functions.get_weather': (
-        'c0c4118e04ad96cde16a51c38445fbf28451fddc', 'files/plugins_func/functions/get_weather.py',
-        '和风城市查询：私有 API Key 放请求头，不进入 URL'),
     'core.utils.opus_encoder_utils': (
         '8d603e2266d3a7e796e6a3b4000202ea8d1a50e3', 'files/core/utils/opus_encoder_utils.py',
         '下发语音 Opus 码率 24k -> 64k'),

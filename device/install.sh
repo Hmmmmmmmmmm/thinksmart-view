@@ -123,13 +123,23 @@ else
   esac
 fi
 
-# 6. 安装系统级 systemd / udev / sysctl / WirePlumber 配置
-echo "==> [6/8] 安装系统级 systemd、udev、sysctl 与 WirePlumber 配置..."
+# 6. 安装系统级 journald / systemd / udev / sysctl / WirePlumber 配置
+echo "==> [6/8] 安装系统级 journald、systemd、udev、sysctl 与 WirePlumber 配置..."
+install -D -m 0644 "$DEV_DIR/configs/journald/thinksmart.conf" \
+  /etc/systemd/journald.conf.d/thinksmart.conf
+
 for f in "$DEV_DIR/configs/systemd/system/"*.service; do
   install -D -m 0644 "$f" "/etc/systemd/system/$(basename "$f")"
 done
-install -D -m 0644 "$DEV_DIR/configs/systemd/system/thinksmart-kiosk.service.d/override.conf" \
-  /etc/systemd/system/thinksmart-kiosk.service.d/override.conf
+for dropin_rel in \
+  NetworkManager-wait-online.service.d/thinksmart.conf \
+  bluetooth.service.d/no-sap.conf \
+  screen-wake.service.d/override.conf \
+  thinksmart-gpu-watchdog.service.d/override.conf \
+  thinksmart-kiosk.service.d/override.conf; do
+  install -D -m 0644 "$DEV_DIR/configs/systemd/system/$dropin_rel" \
+    "/etc/systemd/system/$dropin_rel"
+done
 
 for f in "$DEV_DIR/configs/udev/"*.rules; do
   install -D -m 0644 "$f" "/etc/udev/rules.d/$(basename "$f")"
@@ -159,10 +169,17 @@ for sub in bluetooth.lua.d main.lua.d; do
   done
 done
 
-mkdir -p "$TARGET_HOME/.config/systemd/user/xiaozhi-hub.service.d"
+mkdir -p \
+  "$TARGET_HOME/.config/systemd/user/idle-blanker.service.d" \
+  "$TARGET_HOME/.config/systemd/user/thinksmart-mic.service.d" \
+  "$TARGET_HOME/.config/systemd/user/xiaozhi-hub.service.d"
 for f in "$DEV_DIR/configs/systemd/user/"*.service; do
   install -m 0644 "$f" "$TARGET_HOME/.config/systemd/user/$(basename "$f")"
 done
+install -m 0644 "$DEV_DIR/configs/systemd/user/idle-blanker.service.d/override.conf" \
+  "$TARGET_HOME/.config/systemd/user/idle-blanker.service.d/override.conf"
+install -m 0644 "$DEV_DIR/configs/systemd/user/thinksmart-mic.service.d/override.conf" \
+  "$TARGET_HOME/.config/systemd/user/thinksmart-mic.service.d/override.conf"
 # 仅安装正式 drop-in，刻意跳过 proxy.conf.example，避免无本地代理时阻断 xiaozhi-hub
 install -m 0644 "$DEV_DIR/configs/systemd/user/xiaozhi-hub.service.d/thinksmart-overrides.conf" \
   "$TARGET_HOME/.config/systemd/user/xiaozhi-hub.service.d/thinksmart-overrides.conf"
@@ -174,12 +191,19 @@ chown -R "$TARGET_UID:$TARGET_GID" \
 
 install -D -m 0644 "$DEV_DIR/xiaozhi-overrides/sitecustomize.py" \
   /opt/thinksmart-addons/xiaozhi-hub-overrides/sitecustomize.py
+if [ -d "$DEV_DIR/xiaozhi-overrides/files" ]; then
+  rm -rf /opt/thinksmart-addons/xiaozhi-hub-overrides/files
+  cp -R "$DEV_DIR/xiaozhi-overrides/files" /opt/thinksmart-addons/xiaozhi-hub-overrides/files
+  chown -R root:root /opt/thinksmart-addons/xiaozhi-hub-overrides
+  chmod -R u=rwX,go=rX /opt/thinksmart-addons/xiaozhi-hub-overrides
+fi
 
 # 8. 重载规则与服务
-echo "==> [8/8] 重载 udev、sysctl 与 systemd 服务..."
+echo "==> [8/8] 重载 journald、udev、sysctl 与 systemd 服务..."
 udevadm control --reload-rules >/dev/null 2>&1 || true
 sysctl --system >/dev/null 2>&1 || true
 systemctl daemon-reload
+systemctl restart systemd-journald >/dev/null 2>&1 || true
 
 SYSTEM_UNITS=(
   display-guard.service
@@ -204,11 +228,14 @@ fi
 USER_ENV="XDG_RUNTIME_DIR=/run/user/$TARGET_UID DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$TARGET_UID/bus"
 if su - "$TARGET_USER" -c "$USER_ENV systemctl --user status" >/dev/null 2>&1; then
   su - "$TARGET_USER" -c "$USER_ENV systemctl --user daemon-reload" || true
-  for u in thinksmart-mic.service tas5782m-preinit.service idle-blanker.service thinksmart-airplay.service; do
+  for u in thinksmart-mic.service tas5782m-preinit.service idle-blanker.service vcnl4200-proximity-daemon.service thinksmart-airplay.service; do
     su - "$TARGET_USER" -c "$USER_ENV systemctl --user enable '$u'" >/dev/null 2>&1 || true
   done
-  su - "$TARGET_USER" -c "$USER_ENV systemctl --user restart pipewire pipewire-pulse wireplumber thinksmart-mic.service idle-blanker.service thinksmart-airplay.service" >/dev/null 2>&1 || true
+  su - "$TARGET_USER" -c "$USER_ENV systemctl --user restart pipewire pipewire-pulse wireplumber thinksmart-mic.service idle-blanker.service vcnl4200-proximity-daemon.service thinksmart-airplay.service" >/dev/null 2>&1 || true
   su - "$TARGET_USER" -c "$USER_ENV systemctl --user start tas5782m-preinit.service" >/dev/null 2>&1 || true
+  if su - "$TARGET_USER" -c "$USER_ENV systemctl --user list-unit-files xiaozhi-hub.service" 2>/dev/null | grep -q 'xiaozhi-hub.service'; then
+    su - "$TARGET_USER" -c "$USER_ENV systemctl --user restart xiaozhi-hub.service" >/dev/null 2>&1 || true
+  fi
 else
   echo "提示：用户态 systemd 会话当前未运行，请重启设备后自动拉起用户态服务。"
 fi
