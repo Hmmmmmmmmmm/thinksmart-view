@@ -5,6 +5,7 @@ UID_NUM="$(id -u)"
 VOICE_LOG_DIR="$HOME/Library/Logs/xiaozhi-voice"
 VISION_LOG_DIR="$HOME/Library/Logs/study-vision"
 GATEWAY_PORT="${GATEWAY_PORT:-8080}"
+VISION_LLM_PORT="${STUDY_VISION_LLM_PORT:-8083}"
 VISION_PORT="${STUDY_VISION_PORT:-8084}"
 
 cmd="${1:-status}"
@@ -12,11 +13,12 @@ target="${2:-}"
 
 label_for() {
   case "$1" in
-    voice)   echo "com.thinksmart.voice" ;;
-    tts2)    echo "com.thinksmart.voice-tts2" ;;
-    gateway) echo "com.thinksmart.gateway" ;;
-    vision)  echo "com.thinksmart.study-vision-bridge" ;;
-    *)       echo "Unknown service: $1 (expected voice|tts2|gateway|vision|all)" >&2; exit 1 ;;
+    voice)      echo "com.thinksmart.voice" ;;
+    tts2)       echo "com.thinksmart.voice-tts2" ;;
+    gateway)    echo "com.thinksmart.gateway" ;;
+    vision-llm) echo "com.thinksmart.study-vision-llm" ;;
+    vision)     echo "com.thinksmart.study-vision-bridge" ;;
+    *)          echo "Unknown service: $1 (expected voice|tts2|gateway|vision-llm|vision|all)" >&2; exit 1 ;;
   esac
 }
 
@@ -24,7 +26,7 @@ targets_for() {
   local default_t="$1"
   local t="${target:-$default_t}"
   if [ "$t" = "all" ]; then
-    echo "voice tts2 gateway vision"
+    echo "voice tts2 gateway vision-llm vision"
   else
     echo "$t"
   fi
@@ -64,22 +66,27 @@ case "$cmd" in
     for s in $(targets_for all); do
       case "$s" in
         voice)
-          printf "[voice   :8010 ] "
+          printf "[voice      :8010 ] "
           curl -fsS --max-time 3 http://127.0.0.1:8010/health || printf "not responding"
           echo ""
           ;;
         tts2)
-          printf "[tts2    :8011 ] "
+          printf "[tts2       :8011 ] "
           curl -fsS --max-time 3 http://127.0.0.1:8011/health || printf "not responding"
           echo ""
           ;;
         gateway)
-          printf "[gateway :%s ] " "$GATEWAY_PORT"
+          printf "[gateway    :%s ] " "$GATEWAY_PORT"
           curl -fsS --max-time 3 "http://127.0.0.1:${GATEWAY_PORT}/health" || printf "not responding"
           echo ""
           ;;
+        vision-llm)
+          printf "[vision-llm :%s ] " "$VISION_LLM_PORT"
+          curl -fsS --max-time 3 "http://127.0.0.1:${VISION_LLM_PORT}/health" || printf "not responding (or idle-asleep)"
+          echo ""
+          ;;
         vision)
-          printf "[vision  :%s ] " "$VISION_PORT"
+          printf "[vision     :%s ] " "$VISION_PORT"
           curl -fsS --max-time 3 "http://127.0.0.1:${VISION_PORT}/health" || printf "not responding"
           echo ""
           ;;
@@ -91,16 +98,17 @@ case "$cmd" in
     ;;
   logs)
     case "${target:-voice}" in
-      voice)   tail -n 50 "$VOICE_LOG_DIR/server.out.log" "$VOICE_LOG_DIR/server.err.log" 2>/dev/null ;;
-      tts2)    tail -n 50 "$VOICE_LOG_DIR/tts2.out.log" "$VOICE_LOG_DIR/tts2.err.log" 2>/dev/null ;;
-      gateway) tail -n 50 "$VOICE_LOG_DIR/gateway.out.log" "$VOICE_LOG_DIR/gateway.err.log" 2>/dev/null ;;
-      vision)  tail -n 50 "$VISION_LOG_DIR/bridge.out.log" "$VISION_LOG_DIR/bridge.err.log" 2>/dev/null ;;
-      all)     tail -n 25 "$VOICE_LOG_DIR/"*.log "$VISION_LOG_DIR/bridge."*.log 2>/dev/null ;;
-      *)       label_for "$target" >/dev/null ;;
+      voice)      tail -n 50 "$VOICE_LOG_DIR/server.out.log" "$VOICE_LOG_DIR/server.err.log" 2>/dev/null ;;
+      tts2)       tail -n 50 "$VOICE_LOG_DIR/tts2.out.log" "$VOICE_LOG_DIR/tts2.err.log" 2>/dev/null ;;
+      gateway)    tail -n 50 "$VOICE_LOG_DIR/gateway.out.log" "$VOICE_LOG_DIR/gateway.err.log" 2>/dev/null ;;
+      vision-llm) tail -n 50 "$VISION_LOG_DIR/llm.out.log" "$VISION_LOG_DIR/llm.err.log" 2>/dev/null ;;
+      vision)     tail -n 50 "$VISION_LOG_DIR/bridge.out.log" "$VISION_LOG_DIR/bridge.err.log" 2>/dev/null ;;
+      all)        tail -n 25 "$VOICE_LOG_DIR/"*.log "$VISION_LOG_DIR/"*.log 2>/dev/null ;;
+      *)          label_for "$target" >/dev/null ;;
     esac
     ;;
   *)
-    echo "Usage: $0 {start|stop|restart|status|logs} [voice|tts2|gateway|vision|all]"
+    echo "Usage: $0 {start|stop|restart|status|logs} [voice|tts2|gateway|vision-llm|vision|all]"
     exit 1
     ;;
 esac

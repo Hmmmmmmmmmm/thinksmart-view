@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 只读诊断脚本：排查「小智界面能唤醒，但切到主页/音乐/监控等界面无法唤醒」的原因
+# 只读自检脚本：全面排查「小智底座、跨界面语音唤醒链路、自研服务与硬件组件」就绪状态
 set -u
 
 FAIL=0
@@ -9,16 +9,22 @@ pass() { printf '[\033[32mPASS\033[0m] %s\n' "$1"; }
 warn() { printf '[\033[33mWARN\033[0m] %s\n' "$1"; WARN=$((WARN + 1)); }
 fail() { printf '[\033[31mFAIL\033[0m] %s\n' "$1"; FAIL=$((FAIL + 1)); }
 
-echo "=== ThinkSmart View 跨界面语音唤醒诊断 ==="
+echo "=== ThinkSmart View 整机部署与跨界面唤醒自检 ==="
 
 # 1. 基础语音客户端是否安装与运行
 if [ -d /opt/thinksmart/client/current ] && systemctl is-active --quiet thinksmart-client.service; then
   pass "thinksmart-client.service 运行中（后台常驻麦克风与 sherpa-onnx 唤醒）"
 else
-  fail "未检测到运行中的 thinksmart-client.service（/opt/thinksmart/client/current）。如使用仅靠浏览器录音的网页版小智，切走页面后必然无法唤醒；本仓库需配合 justhalfbit/xiaozhi-thinksmart-client 底包使用。"
+  fail "未检测到运行中的 thinksmart-client.service（/opt/thinksmart/client/current）。本仓库需先刷入含小智底座的 justhalfbit/thinksmart-ubuntu-image 后再进行二次安装。"
 fi
 
-# 2. Kiosk 顶层 URL 必须指向小智 :8090
+# 2. Kiosk 顶层 URL 必须指向小智 :8090 + PAM 会话文件就位
+if [ -f /etc/pam.d/thinksmart-kiosk ]; then
+  pass "存在 PAM 会话配置 /etc/pam.d/thinksmart-kiosk"
+else
+  fail "缺少 /etc/pam.d/thinksmart-kiosk（Weston Kiosk 自动登录将失败，请重新运行 sudo bash device/install.sh）"
+fi
+
 if [ -f /etc/thinksmart-kiosk.conf ]; then
   KIOSK_URL="$(sed -n 's/^URL=\(.*\)/\1/p' /etc/thinksmart-kiosk.conf | tail -n 1 | tr -d '"'\''[:space:]')"
   case "$KIOSK_URL" in
@@ -30,7 +36,7 @@ if [ -f /etc/thinksmart-kiosk.conf ]; then
       ;;
   esac
 else
-  fail "缺少 /etc/thinksmart-kiosk.conf（请参考 device/configs/kiosk/thinksmart-kiosk.conf.example 或运行 sudo bash device/install.sh）"
+  fail "缺少 /etc/thinksmart-kiosk.conf（请运行 sudo bash device/install.sh）"
 fi
 
 # 3. Kiosk 注入脚本与叠加层是否存在
@@ -43,7 +49,8 @@ fi
 for asset in \
   /usr/local/share/thinksmart-monitor/home_overlay.js \
   /usr/local/share/thinksmart-qqmusic/kiosk_overlay.js \
-  /usr/local/share/thinksmart-home/index.html; do
+  /usr/local/share/thinksmart-home/index.html \
+  /usr/local/share/thinksmart-qqmusic/index.html; do
   if [ -f "$asset" ]; then
     pass "存在界面资源: $asset"
   else
@@ -74,9 +81,39 @@ else
   warn "未找到 /run/user/1000/qqmusic-bridge.json（若刚部署请重启 thinksmart-client.service）"
 fi
 
-# 5. 麦克风与 PipeWire / WirePlumber
-TARGET_USER="${SUDO_USER:-ubuntu}"
-if id "$TARGET_USER" >/dev/null 2>&1 && [ "$TARGET_USER" != "root" ]; then
+# 5. 核心系统服务与硬件增强组件检查
+for svc in thinksmart-home.service thinksmart-qqmusic.service thinksmart-monitor.service thinksmart-intercom.service thinksmart-study.service thinksmart-kiosk.service thinksmart-usb-host.service; do
+  if systemctl is-active --quiet "$svc"; then
+    pass "系统服务运行中: $svc"
+  else
+    fail "系统服务未运行: $svc（请检查 journalctl -u $svc -n 30）"
+  fi
+done
+
+for hw_bin in /usr/local/bin/uxplay /usr/local/lib/libuxplay_autorotate.so /usr/local/bin/s5kc505a_cam_helper; do
+  if [ -x "$hw_bin" ]; then
+    pass "存在硬件组件: $hw_bin"
+  else
+    warn "缺少硬件组件: $hw_bin（AirPlay 投屏或前置摄像头将不可用）"
+  fi
+done
+
+if [ -e /dev/video0 ]; then
+  pass "前置摄像头设备节点已就绪 (/dev/video0)"
+else
+  warn "未检测到 /dev/video0（如刚通过 install.sh 更新摄像头 DTB，执行 sudo reboot 重启一次即可点亮）"
+fi
+
+# 6. 麦克风与用户态 PipeWire / WirePlumber（固定检查 ubuntu 用户，兼容 root / sudo 调用）
+if [ -n "${THINKSMART_USER:-}" ] && id "$THINKSMART_USER" >/dev/null 2>&1; then
+  TARGET_USER="$THINKSMART_USER"
+elif id ubuntu >/dev/null 2>&1; then
+  TARGET_USER="ubuntu"
+else
+  TARGET_USER=""
+fi
+
+if [ -n "$TARGET_USER" ]; then
   U_HOME="$(getent passwd "$TARGET_USER" | cut -d: -f6)"
   U_UID="$(id -u "$TARGET_USER")"
   if [ -f "$U_HOME/.config/wireplumber/main.lua.d/51-cd18781y-alsa.lua" ]; then
@@ -84,17 +121,19 @@ if id "$TARGET_USER" >/dev/null 2>&1 && [ "$TARGET_USER" != "root" ]; then
   else
     warn "缺少 $U_HOME/.config/wireplumber/main.lua.d/51-cd18781y-alsa.lua"
   fi
-  if su - "$TARGET_USER" -c "XDG_RUNTIME_DIR=/run/user/$U_UID DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$U_UID/bus systemctl --user is-active --quiet thinksmart-mic.service" 2>/dev/null; then
-    pass "用户态 thinksmart-mic.service 运行中"
-  else
-    fail "用户态 thinksmart-mic.service 未运行，PipeWire 虚拟麦克风源可能未就绪"
-  fi
+  for usvc in thinksmart-mic.service idle-blanker.service thinksmart-airplay.service; do
+    if su - "$TARGET_USER" -c "XDG_RUNTIME_DIR=/run/user/$U_UID DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$U_UID/bus systemctl --user is-active --quiet '$usvc'" 2>/dev/null; then
+      pass "用户态服务运行中: $usvc"
+    else
+      fail "用户态服务未运行: $usvc"
+    fi
+  done
 fi
 
-if [ -f /etc/wireplumber/scripts/suspend-node.lua ]; then
-  pass "已安装 /etc/wireplumber/scripts/suspend-node.lua（防 TAS5782M 功放休眠吞提示音）"
+if [ -f /etc/wireplumber/scripts/suspend-node.lua ] && [ -f /etc/wireplumber/main.lua.d/99-cd18781y-alsa.lua ]; then
+  pass "已安装系统级 WirePlumber ALSA 保护与防功放休眠脚本"
 else
-  warn "缺少 /etc/wireplumber/scripts/suspend-node.lua（唤醒提示音可能因功放冷启动 546ms 而无声）"
+  warn "缺少 /etc/wireplumber/scripts/suspend-node.lua 或 99-cd18781y-alsa.lua"
 fi
 
 if [ -f /opt/thinksmart-addons/xiaozhi-hub-overrides/sitecustomize.py ] && [ -d /opt/thinksmart-addons/xiaozhi-hub-overrides/files ]; then

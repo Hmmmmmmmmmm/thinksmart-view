@@ -28,24 +28,26 @@
 flowchart LR
     subgraph Device["Lenovo ThinkSmart View (Ubuntu 24.04 ARM64 · 1280×800)"]
         Kiosk["thinksmart-kiosk.py<br/>Weston + WebKitGTK + UserScripts"]
+        XZ["xiaozhi-thinksmart-client (:8090)<br/>底层常驻语音唤醒 / WebRTC AEC / 系统设置"]
         Home["thinksmart-home (:8095)<br/>主页 / 多城天气 / 万年历 / 家庭留言板 / 睡眠白噪音"]
         Music["thinksmart-qqmusic (:8091)<br/>QQ音乐 HD 无损 + 76 路高清电台/听书 + WebRTC AEC"]
         Monitor["thinksmart-monitor (:8092)<br/>Nezha 实时探针看板 + 周期流量校准 + 感光调光"]
         Intercom["thinksmart-intercom (:18091)<br/>S5KC505A 15fps 可视对讲 + 重力旋转 + 双向通话"]
         Study["thinksmart-study (:8093/:8094)<br/>三连拍坐姿/专注陪伴 + 番茄钟 + 家长看板"]
-        AirPlay["thinksmart-airplay<br/>UxPlay 镜像投屏 + 重力自动横竖屏"]
+        AirPlay["thinksmart-airplay<br/>UxPlay 1.74 镜像投屏 + NEON 重力横竖屏"]
         Blanker["idle-blanker.py<br/>ALS 对数自动感光 + 息屏冻结 WebKit 0% CPU"]
     end
 
     subgraph Mac["Apple Silicon Mac 本地算力端 (M1/M2/M3/M4)"]
         Gateway["public_gateway.py (:8080)<br/>路径 Token 鉴权网关"]
         Voice["voice-server (:8010 / :8011)<br/>MLX Qwen3-ASR + Qwen3-TTS 多风格流式克隆"]
-        Vision["vision_bridge.py (:8084)<br/>SHAKE256+HMAC 端到端解密 + Qwen3-VL-8B"]
+        Vision["vision_bridge.py (:8084) + llama-server (:8083)<br/>SHAKE256+HMAC 端到端解密 + Qwen3-VL-8B"]
     end
 
-    Kiosk --> Home
-    Kiosk --> Music
-    Kiosk --> Monitor
+    Kiosk -->|"顶层宿主页"| XZ
+    Kiosk -->|"UserScript 叠加层"| Home
+    Kiosk -->|"全屏子层"| Music
+    Kiosk -->|"全屏子层"| Monitor
     Study -->|"借帧 ws://127.0.0.1:18091/ws"| Intercom
     Study -->|"E2EE (SHAKE256 + HMAC)"| Gateway
     Gateway --> Vision
@@ -66,8 +68,9 @@ flowchart LR
 | [`device/intercom/`](device/intercom/) | `thinksmart-intercom.py` (`:18091`) | **远程双向可视对讲**：点亮机身 S5KC505A 摄像头，联动物理镜头盖 (`gpio87`) 与麦克风静音键 (`gpio86`)，读取 `BMA253` 重力传感器自动扶正 `0°/90°/180°/270°` 画面，支持手机网页省流模式、现场监听、全双工视频通话、家庭留言板远程收发及**手机端倒数日/公农历生日在线管理**。 |
 | [`device/study/`](device/study/) | `thinksmart-study.py` (`:8093` / `:8094`) | **AI 学习坐姿与专注陪伴**：手动开启（带 3 小时自动关闭安全锁），每分钟 3 张跨 8 秒连拍过滤瞬间动作，经 **SHAKE256 + HMAC-SHA256 端到端加密**送交本地视觉模型判断坐姿/趴桌/走神/玩手机，连续命中后用自然克隆童声/女声温和提醒（自动避让通话/投屏并暂停恢复背景音乐）；内置响应式手机/电脑家长统计页（只存脱敏文字结果，零照片落盘）。 |
 | [`device/system/`](device/system/) | `idle-blanker.py` / `thinksmart-airplay.py` 等 | **底层电源、显示、投屏与外设守护**：环境光对数曲线平滑调光（夜间最低可至 `0%`）、息屏 `SIGSTOP` 冻结 `WebKitWebProcess` 实现息屏应用 `0%` CPU、Adreno GPU 恢复看门狗、AirPlay 镜像时期 CPU/GPU 绑核提权与 Wayland 自动重连、底部 Type-C 接口 USB Host 热插拔自动挂载。 |
+| [`device/prebuilt/arm64/`](device/prebuilt/arm64/) | `s5kc505a_cam_helper` / `uxplay` / `.dtb` 等 | **ARM64 硬件增强预编译包（附 SHA256 校验与 DTS 补丁源码）**：包含 `S5KC505A` 15fps 零常驻功耗软 ISP 采集器与摄像头设备树、定制版 `UxPlay 1.74`（修复新版 iOS 花屏 + `WMM AC_VI` 无线加速 + `48kHz F32LE` 音频）、`BMA253` ARM64 NEON 重力自动旋转插件及 PipeWire `FDK-AAC` 高清蓝牙编码插件。 |
 | [`device/xiaozhi-overrides/`](device/xiaozhi-overrides/) | `sitecustomize.py` + `files/` | **小智 Hub 无侵入热补丁加载器**：启动时逐文件校验官方 Git Blob SHA，匹配时才挂载 `64kbps` 全频带 Opus 高音质编码、流式 TTS 增强、QQ 音乐语音桥接与管理后台鉴权/SSRF 加固（共 21 个模块），上游更新后自动回退官方模块，保证零启动故障。 |
-| [`device/configs/`](device/configs/) | `systemd` / `journald` / `pipewire` / `wireplumber` / `udev` | **全链路 Hi-Fi 音频与系统加固配置**：PipeWire `48kHz` 原生时钟 + `resample.quality=10` (256-tap sinc) + `wannamaker3` 心理声学抖动、蓝牙 A2DP 直通高清配置、`NetworkManager-wait-online` 秒级放行、`journald` 闪存限额及内核网络缓冲参数。 |
+| [`device/configs/`](device/configs/) | `systemd` / `pam.d` / `pipewire` / `wireplumber` / `bluetooth` | **全链路 Hi-Fi 音频与系统加固配置**：PipeWire `48kHz` 原生时钟 + `resample.quality=10` (256-tap sinc) + `wannamaker3` 心理声学抖动、蓝牙音箱免 PIN 高清配对、高通 `q6asm` 防死锁 ALSA 保护、QCA9379 Wi-Fi 省电关闭及 `NetworkManager-wait-online` 秒级放行。 |
 | [`device/tests/`](device/tests/) | `test_*.py` | **自动化回归测试集**：覆盖主页、三端倒数日与公农历/闰月换算、多城天气详情、留言板与定时提醒、睡眠唤醒、QQ音乐收藏与网络电台/听书续播、服务器看板与安全边界校验。 |
 
 ### 2. Apple Silicon 本地算力配套端 (`mac-companion/`)
@@ -75,7 +78,7 @@ flowchart LR
 | 目录 | 组件 | 核心特性 |
 | --- | --- | --- |
 | [`mac-companion/voice-server/`](mac-companion/voice-server/) | `server.py` + `tts_speedups.py` + `public_gateway.py` | **MLX 本地语音识别与多风格流式克隆服务 (`:8010` / `:8011`)**：基于 `Qwen3-ASR-1.7B` 与 `Qwen3-TTS-12Hz-1.7B-Base`；`tts_speedups.py` 通过 `mx.compile` 编译 15 步声码预测图并缓存解码器参考尾帧状态，在 M1 Pro 上实现 **`~300ms` 首包延迟、`RTF ~0.6x`**；内置 `calm / flow / warm / question` 四风格防单调轮换、`200ms` 参考静音隔离带、显式语种注入及动态音节软硬双层防失控保护；支持主从双进程并发溢出 (`TTS_OVERFLOW_URL`)、**副 TTS 进程空闲自动休眠卸载 (`TTS_IDLE_SLEEP_SECONDS`) 与请求到来秒级自唤醒**，以及 ASR 上传 (`25 MiB`) 与网关请求体 (`16 MiB`) 安全上限。 |
-| [`mac-companion/study-vision/`](mac-companion/study-vision/) | `vision_bridge.py` | **学习陪伴端到端加密视觉桥接 (`:8084`)**：纯标准库实现 `SHAKE256 + HMAC-SHA256` 双向加解密与 `120s` 防重放窗口，按设备重力角调用系统 `sips` 自动转正画面（内存/0700 临时目录即用即焚），内置 `10 MB` 定时拷贝截断日志轮转，串行调度本地 `llama-server` (`Qwen3-VL-8B-Instruct`)。 |
+| [`mac-companion/study-vision/`](mac-companion/study-vision/) | `vision_bridge.py` + `llama-server` | **学习陪伴端到端加密视觉桥接 (`:8084` -> `:8083`)**：纯标准库实现 `SHAKE256 + HMAC-SHA256` 双向加解密与 `120s` 防重放窗口，按设备重力角调用系统 `sips` 自动转正画面（内存/0700 临时目录即用即焚），内置 `10 MB` 定时拷贝截断日志轮转，串行调度本地 `llama-server` (`Qwen3-VL-8B-Instruct`，支持 10 分钟空闲自动休眠释放显存)。 |
 
 ---
 
@@ -86,87 +89,109 @@ thinksmart-view/
 ├── docs/
 │   └── images/               # 1280×800 实机成品界面预览图
 ├── device/
-│   ├── install.sh            # 设备端一键安装与路径修正脚本
-│   ├── diagnose-wake.sh      # 跨界面语音唤醒链路只读诊断脚本
+│   ├── install.sh            # 设备端一键二次安装、依赖补齐与安全升级脚本
+│   ├── diagnose-wake.sh      # 整机服务、硬件组件与跨界面语音唤醒只读自检脚本
+│   ├── prebuilt/arm64/       # 预编译摄像头 ISP、设备树补丁、UxPlay 1.74、NEON 旋转与蓝牙 AAC 插件
 │   ├── home/                 # 桌面主页、多城天气详情、万年历、家庭留言板、助眠与专注计时
-│   ├── qqmusic/              # 独立 QQ 音乐 HD 无损服务、触屏界面与 WebRTC AEC 桥接钩子
+│   ├── qqmusic/              # 独立 QQ 音乐 HD 无损、76 路网络电台/听书与 WebRTC AEC 桥接钩子
 │   ├── monitor/              # Nezha 服务器看板、流量校准、显示控制与顶栏叠加层
 │   ├── intercom/             # 远程双向可视对讲、全屏通话 UI 与反向 SSH 隧道脚本模板
 │   ├── study/                # AI 学习陪伴服务与家长手机/电脑端统计面板
 │   ├── kiosk/                # 首次联网 Wi-Fi 向导、虚拟软键盘等 Kiosk 静态资源
 │   ├── system/               # 自动感光息屏守护、AirPlay 调度器、Kiosk 启动器与 DMIC 音频桥
 │   ├── xiaozhi-overrides/    # 小智 Hub Git-Blob 校验无侵入加载器与高音质补丁
-│   ├── configs/              # systemd / PipeWire / WirePlumber（用户态+系统态）/ udev / kiosk 配置
+│   ├── configs/              # systemd / PAM / PipeWire / WirePlumber / Bluetooth / udev / sysctl
 │   └── tests/                # 设备端自动化单元与接口回归测试套件
 └── mac-companion/
+    ├── install-mac.sh        # Mac 算力端一键环境初始化与 LaunchAgent 生成脚本
     ├── voice-server/         # Apple Silicon MLX 本地 ASR + Qwen3-TTS 流式语音克隆与网关
-    └── study-vision/         # 学习陪伴 E2EE 视觉桥接服务与 LaunchAgent 模板
+    └── study-vision/         # 学习陪伴 E2EE 视觉桥接服务与 Qwen3-VL LaunchAgent 模板
 ```
 
 ---
 
 ## 快速部署指引
 
-### 一、设备端部署（Lenovo ThinkSmart View · Ubuntu 24.04 ARM64）
+### 前置必读：刷机顺序与小智底座依赖关系
 
-> **前置底包要求**：本套件基于 [`justhalfbit/thinksmart-ubuntu-image`](https://github.com/justhalfbit/thinksmart-ubuntu-image)（Ubuntu 24.04 ARM64）+ [`xiaozhi-thinksmart-client`](https://github.com/justhalfbit/xiaozhi-thinksmart-client)（监听 `127.0.0.1:8090`，由后台服务常驻读取 `thinksmart_mic` 进行 `sherpa-onnx` 语音唤醒）构建。  
-> **架构铁律**：`/etc/thinksmart-kiosk.conf` 中的顶层 `URL` **必须保持 `http://127.0.0.1:8090/`（小智页面）**，绝不能改成 `:8095`。主页 (`:8095`)、QQ音乐 (`:8091`) 与服务器监控 (`:8092`) 是通过 `thinksmart-kiosk.py` 注入 `home_overlay.js` 作为全屏 `iframe` 叠加层盖在 `:8090` 上方，从而确保任意界面下底层小智始终常驻监听。
+**是的，本套系统属于基于「小智语音底座」的二次安装全栈扩展套件**，完整安装只需两步，**不需要**在裸 Ubuntu 上自己从零手动编译安装小智：
 
-#### 方式 A：一键安装（强烈推荐）
+1. **第一步（刷入已内置小智的社区 Ubuntu 24.04 底包）**：
+   - 按照 [`justhalfbit/thinksmart-ubuntu-image`](https://github.com/justhalfbit/thinksmart-ubuntu-image) 官方刷机指南，将社区固件镜像刷入联想 `ThinkSmart View (CD-18781Y)`。
+   - **该底包出厂已预装好** Ubuntu 24.04 ARM64、声卡/触控/光线传感器驱动、Weston 显示服务，以及完整的小智客户端 [`xiaozhi-thinksmart-client`](https://github.com/justhalfbit/xiaozhi-thinksmart-client)（`thinksmart-client.service` `:8090`）与本地服务端 `xiaozhi-hub-server`（`:16688`）。
+   - *注意：切勿刷不含小智的上游裸机镜像，因为本套件依赖小智 `:8090` 作为最底层常驻宿主（负责 `sherpa-onnx` 离线唤醒词监听、WebRTC 硬件回声消除、语音对话以及系统 Wi-Fi / 设置抽屉面板）。*
+2. **第二步（运行本仓库一键二次安装脚本）**：
+   - 底包开机连上 Wi-Fi 后，SSH 登录设备克隆本仓库，执行 `sudo bash device/install.sh`，首次安装完执行一次 `sudo reboot` 激活前置摄像头设备树即可投入使用。
+   - 所有自研服务均隔离安装在 `/opt/thinksmart-addons/venv` 中，后续小智客户端或 Hub 在线升级时**互不干扰、不会被覆盖**。
 
-在设备上克隆或解压本仓库后，直接执行自动部署脚本（自动创建虚拟环境、放置系统级/用户级配置、安装并重命名 AEC 桥接钩子、校对 `:8090` 顶层 URL 并重启相关服务）：
+---
+
+### 一、设备端一键安装（Lenovo ThinkSmart View · Ubuntu 24.04 ARM64）
 
 ```bash
+git clone https://github.com/fubin0478/thinksmart-view.git
+cd thinksmart-view
 sudo bash device/install.sh
 ```
 
-按需配置扩展环境变量与服务器清单后即可使用：
-- 编辑 `/etc/systemd/system/thinksmart-monitor.service` 设置您的 `NEZHA_HOST`，参考 [`servers.example.json`](device/monitor/servers.example.json) 与 [`traffic.example.json`](device/monitor/traffic.example.json) 更新 `/usr/local/share/thinksmart-monitor/{servers,traffic}.json`。
-- 编辑 `/etc/systemd/system/thinksmart-home.service` 设置 `WEATHER_DEFAULT_CITY`、`WEATHER_EXTRA_CITIES` 及和风天气 API Key 文件路径。
+`device/install.sh` 会自动完成以下全部工作（支持重复运行无损升级）：
+- 预检 `aarch64` 架构与 `thinksmart-client.service` 小智底座；
+- 自动检测并按需通过 `apt` 补齐底包缺失的运行库（`python3-dbus`、`python3-gi`、`python3-smbus2`、`ffmpeg`、`avahi-daemon`、`gstreamer1.0-gl`、`gstreamer1.0-plugins-bad`、`libfdk-aac2`、`exfatprogs`、`ntfs-3g` 等）；
+- 创建独立 `/opt/thinksmart-addons/venv` 环境并安装 `aiohttp`、`numpy`、`lunar_python`；
+- 校验 SHA256 后部署 `S5KC505A` 摄像头软 ISP 采集器、摄像头设备树补丁（自动备份 `/boot/apq8053-lenovo-cd-18781y.dtb.bak`，仅对匹配的 `20261101` 原厂底包安全替换）、`UxPlay 1.74`、`NEON` 重力旋转库及蓝牙 `AAC` 编码器；
+- 部署 WebRTC AEC 回声消除桥接钩子（`/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py`）、小智 Hub 无侵入热补丁、PAM/音频/蓝牙/U盘自动挂载配置，屏蔽冲突的 `shairport-sync` / `iio-sensor-proxy` / `udisks2` 服务，并确保 `/etc/thinksmart-kiosk.conf` 顶层 URL 指向 `http://127.0.0.1:8090/`。
 
-#### 方式 B：手动部署路径对照（如需自行微调）
+**首次安装后执行一次重启与自检**：
+```bash
+sudo reboot
+# 重启后可随时运行只读自检脚本，确认全部服务、摄像头与跨界面唤醒链路 PASS：
+bash device/diagnose-wake.sh
+```
 
-1. **独立 Python 运行环境**：
-   ```bash
-   sudo mkdir -p /opt/thinksmart-addons
-   sudo python3 -m venv /opt/thinksmart-addons/venv
-   sudo /opt/thinksmart-addons/venv/bin/pip install aiohttp numpy lunar_python
-   ```
-2. **服务程序、Kiosk 启动器与 AEC 桥接**：
-   - 将各模块的 `*.py`、`*.sh` 与 `device/system/*`（除 `thinksmart-review`、`thinksmart-set-search-keys` 放 `/usr/local/sbin/`）复制至 `/usr/local/bin/`。
-   - **关键（勿遗漏）**：将 [`device/qqmusic/aec_bridge_sitecustomize.py`](device/qqmusic/aec_bridge_sitecustomize.py) **重命名**复制为 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py`，并部署 `device/configs/systemd/system/thinksmart-client.service.d/aec-bridge.conf`。
-   - 将各前端资源与 [`device/kiosk/*`](device/kiosk/) 复制至 `/usr/local/share/thinksmart-{home,qqmusic,monitor,intercom,study,kiosk}/`。
-3. **系统级与用户级配置（严格区分存放路径）**：
-   - 系统级：`device/configs/systemd/system/*` → `/etc/systemd/system/`；`journald/*` → `/etc/systemd/journald.conf.d/`；`udev/*` → `/etc/udev/rules.d/`；`sysctl/*` → `/etc/sysctl.d/`；`wireplumber-system/*` → `/etc/wireplumber/`；`device/xiaozhi-overrides/{sitecustomize.py,files}` → `/opt/thinksmart-addons/xiaozhi-hub-overrides/`；参考 `device/configs/kiosk/thinksmart-kiosk.conf.example` 配置 `/etc/thinksmart-kiosk.conf`（保持 `URL="http://127.0.0.1:8090/"`）。
-   - 用户级：`device/configs/pipewire/*` → `/home/ubuntu/.config/pipewire/`；`device/configs/wireplumber/*` → `/home/ubuntu/.config/wireplumber/`；`device/configs/systemd/user/*.service`、`{idle-blanker,thinksmart-mic}.service.d/override.conf` 及 `xiaozhi-hub.service.d/thinksmart-overrides.conf` → `/home/ubuntu/.config/systemd/user/`（`proxy.conf.example` 仅作代理参考模板，按需启用）。
+#### 个性化配置（推荐使用 systemd drop-in，升级不丢失）
+
+为避免后续 `git pull && sudo bash device/install.sh` 覆盖您的私有参数，建议通过 `local.conf` 配置环境变量：
+- **天气城市与和风 API Key**：新建 `/etc/systemd/system/thinksmart-home.service.d/local.conf`：
+  ```ini
+  [Service]
+  Environment=WEATHER_DEFAULT_CITY=北京 WEATHER_EXTRA_CITIES=上海,深圳
+  ```
+- **Nezha 服务器探针看板**：新建 `/etc/systemd/system/thinksmart-monitor.service.d/local.conf` 设置 `Environment=NEZHA_HOST=your-nezha.example.com`，并参考 [`servers.example.json`](device/monitor/servers.example.json) 与 [`traffic.example.json`](device/monitor/traffic.example.json) 编辑 `/usr/local/share/thinksmart-monitor/{servers,traffic}.json`（`install.sh` 不会覆盖已存在的 `servers.json` / `traffic.json`）。
+- **自定义高品质助眠环境音（可选）**：系统内置离线 FFT 无缝声景合成兜底（开箱即用）；如需更高音质的真实自然录音循环，可将同名 `.flac` / `.m4a`（如 `rain.flac`、`waves.flac`）放入 `/home/ubuntu/.config/thinksmart-qqmusic/ambient/`。
 
 ---
 
 ### 常见问题：为什么切到主页/其他界面无法唤醒小智？
 
 可先在设备上运行只读排查脚本 **`bash device/diagnose-wake.sh`**，重点检查以下四项：
-1. **顶层 URL 被改成了 `:8095`**：如果把 `/etc/thinksmart-kiosk.conf` 的 `URL` 改成了 `http://127.0.0.1:8095/`，顶层会直接退出 `home_overlay.js`，唤醒后画面切不回小智。需改回 `sudo kiosk-mode url http://127.0.0.1:8090/ && sudo kiosk-mode restart`。
-2. **使用了纯网页版小智而非后台语音客户端**：若系统运行的不是后台常驻麦克风监听的 `xiaozhi-thinksmart-client`（`thinksmart-client.service`），而是依赖浏览器标签页录音的网页客户端，页面一旦跳转就会失去麦克风。
-3. **漏部署或未重命名 `sitecustomize.py`**：未把 `aec_bridge_sitecustomize.py` 放到 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py` 时，播放音乐/助眠声景会绕过 WebRTC 回声消除直接外放，导致声音盖过人声唤醒词。
-4. **未更新 `/usr/local/bin/thinksmart-kiosk.py` 或用户态 WirePlumber 放错目录**：旧版 `thinksmart-kiosk.py` 不会加载 `home_overlay.js` / `kiosk_overlay.js`；而 `device/configs/{pipewire,wireplumber,systemd/user}` 必须放在 `/home/ubuntu/.config/` 下，确保 `thinksmart-mic.service` 与不休眠 DSP 规则正常工作。
+1. **顶层 URL 被改成了 `:8095`**：如果把 `/etc/thinksmart-kiosk.conf` 的 `URL` 改成了 `http://127.0.0.1:8095/`，顶层会直接退出 `home_overlay.js`，唤醒后画面切不回小智。修复：`sudo kiosk-mode url http://127.0.0.1:8090/ && sudo kiosk-mode restart`。
+2. **底包未安装后台语音客户端**：若系统运行的不是后台常驻麦克风监听的 `xiaozhi-thinksmart-client`（`thinksmart-client.service`），而是依赖浏览器标签页录音的网页客户端，页面一旦跳转就会失去麦克风。
+3. **漏部署或未重命名 `sitecustomize.py`**：手动复制时若未把 `aec_bridge_sitecustomize.py` 重命名为 `/usr/local/lib/thinksmart-aec-bridge/sitecustomize.py`，播放音乐/电台/助眠声景会绕过 WebRTC 回声消除直接外放，声音会盖过人声唤醒词。
+4. **未更新 `/usr/local/bin/thinksmart-kiosk.py` 或用户态配置放错账号目录**：旧版 `thinksmart-kiosk.py` 不会加载 `home_overlay.js`；而 `pipewire / wireplumber / systemd/user` 必须位于 `/home/ubuntu/.config/` 下（`install.sh` 已固定锁定 `ubuntu` 账号，兼容 `root` 或其他管理员 `sudo` 执行）。
 
-### 二、Mac 算力端部署（Apple Silicon）
+---
 
-1. **本地语音识别与流式克隆服务 (`mac-companion/voice-server/`)**：
-   ```bash
-   cd mac-companion/voice-server
-   python3.12 -m venv .venv
-   .venv/bin/pip install fastapi uvicorn httpx numpy mlx mlx-audio num2words
-   ```
-   - 将 `Qwen3-ASR-1.7B-8bit` 与 `Qwen3-TTS-12Hz-1.7B-Base-8bit` 模型放入 `models/`，参考 [`voices.example.json`](mac-companion/voice-server/voices/voices.example.json) 准备参考音频与文本。
-   - 参考 `launchd/*.plist.example` 修改用户名路径后放入 `~/Library/LaunchAgents/` 并通过 `launchctl bootstrap gui/$(id -u)` 启动。
-2. **学习陪伴加密视觉桥接 (`mac-companion/study-vision/`)**：
-   - 生成 32 字节共享密钥（设备端 `/var/lib/thinksmart-study/secret` 与 Mac 端 `~/.config/study-vision/secret` 保持一致，`chmod 600`）：
-     ```bash
-     openssl rand -hex 32 > ~/.config/study-vision/secret
-     chmod 600 ~/.config/study-vision/secret
-     ```
-   - 使用 `llama-server` 加载 `Qwen3-VL-8B-Instruct-GGUF`（监听 `127.0.0.1:8083`），并启动 `vision_bridge.py`（监听 `127.0.0.1:8084`）。
+### 二、Mac 算力端部署（Apple Silicon，可选扩展）
+
+如果您希望使用本地 Apple Silicon Mac 提供超低延迟克隆音色 TTS、家庭词库增强 ASR 以及学习陪伴加密视觉推理，可直接运行一键初始化脚本：
+
+```bash
+bash mac-companion/install-mac.sh
+```
+
+该脚本会自动完成：
+1. 创建 `mac-companion/voice-server/.venv` 并根据 [`requirements.txt`](mac-companion/voice-server/requirements.txt) 安装 `fastapi`、`uvicorn`、`python-multipart`、`httpx`、`mlx`、`mlx-audio`、`num2words` 等全部依赖；
+2. 自动生成 `~/.config/thinksmart-voice/public_gateway.json` 随机网关 Token 与 `~/.config/study-vision/secret` 32 字节共享密钥（`chmod 600`，将生成的 `secret` 复制到设备 `/var/lib/thinksmart-study/secret` 即可配对端到端加密通道）；
+3. 自动将 `launchd/*.plist.example` 中的路径替换为当前 Mac 真实用户名与仓库目录，写入 `~/Library/LaunchAgents/`。
+
+随后放入模型并启动：
+- **语音识别与克隆 (`voice-server`)**：将 `Qwen3-ASR-1.7B-8bit` 与 `Qwen3-TTS-12Hz-1.7B-Base-8bit` 放入 `mac-companion/voice-server/models/`，参考 [`voices.example.json`](mac-companion/voice-server/voices/voices.example.json) 配置参考音频。
+- **学习陪伴视觉模型 (`study-vision`)**：执行 `brew install llama.cpp`，将 `Qwen3VL-8B-Instruct-Q4_K_M.gguf` 与 `mmproj-Qwen3VL-8B-Instruct-Q8_0.gguf` 放入 `mac-companion/study-vision/models/`。
+- **统一启停与健康检查**：
+  ```bash
+  bash mac-companion/voice-server/manage.sh start all
+  bash mac-companion/voice-server/manage.sh status
+  ```
 
 ---
 
@@ -180,4 +205,4 @@ sudo bash device/install.sh
 
 ## License
 
-[MIT License](LICENSE)
+[MIT License](LICENSE)（`device/prebuilt/arm64/` 下各独立预编译硬件组件遵循其对应开源许可，详见 [`device/prebuilt/arm64/README.md`](device/prebuilt/arm64/README.md)）。
