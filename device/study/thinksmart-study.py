@@ -67,6 +67,9 @@ CONFIG_PATH = STATE / 'config.json'
 SECRET_PATH = STATE / 'secret'
 VOICE_DIR = STATE / 'voice'
 LOG_DIR = STATE / 'log'
+EDGE_TTS_BIN = Path('/home/ubuntu/xiaozhi-hub-server/main/xiaozhi-server/.venv/bin/edge-tts')
+HUB_CONFIG_PATH = Path('/home/ubuntu/xiaozhi-hub-server/main/xiaozhi-server/data/.config.yaml')
+DEFAULT_EDGE_VOICE = 'zh-CN-XiaoxiaoNeural'
 RUN = Path('/run/user/1000')
 _DEFAULT_RUN = RUN
 _PLAY_ENV = dict(os.environ, XDG_RUNTIME_DIR=str(RUN), PULSE_SERVER=f'unix:{RUN}/pulse/native')
@@ -634,22 +637,87 @@ class Companion:
         async with self.synthesis_lock:
             return await self._synthesize(cfg, text)
 
+    @staticmethod
+    def _hub_edge_voice() -> str:
+        try:
+            raw = _read_regular_text(HUB_CONFIG_PATH, 1024 * 1024)
+        except OSError:
+            return DEFAULT_EDGE_VOICE
+        in_edge, base = False, 0
+        for line in raw.splitlines():
+            s = line.strip()
+            if not s or s.startswith('#'):
+                continue
+            ind = len(line) - len(line.lstrip(' '))
+            if not in_edge:
+                if re.match(r'^EdgeTTS\s*:\s*(#.*)?$', s):
+                    in_edge, base = True, ind
+                continue
+            if ind <= base:
+                break
+            m = re.match(r'^voice\s*:\s*["\']?([A-Za-z0-9_-]{6,64})', s)
+            if m:
+                return m.group(1)
+        return DEFAULT_EDGE_VOICE
+
+    async def _synthesize_builtin_edge(self, text: str, voice_hint: str = '') -> bytearray:
+        pcm = bytearray()
+        if not EDGE_TTS_BIN.is_file():
+            return pcm
+        vh = (voice_hint or '').strip()
+        ev = vh if re.fullmatch(r'[a-z]{2}-[A-Z]{2}-[A-Za-z0-9_-]{4,48}', vh) else self._hub_edge_voice()
+        mp3_tmp = VOICE_DIR / f'.edge.{os.getpid()}.{threading.get_ident()}.mp3'
+        try:
+            p1 = await asyncio.create_subprocess_exec(
+                str(EDGE_TTS_BIN), '--text', text, '--voice', ev, '--no-progress', '--write-media', str(mp3_tmp),
+                stdout=asyncio.subprocess.DEVNULL, stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                rc1 = await asyncio.wait_for(p1.wait(), timeout=20)
+            except asyncio.TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    p1.kill()
+                await p1.wait()
+                return pcm
+            if rc1 != 0 or not mp3_tmp.is_file() or mp3_tmp.stat().st_size < 256:
+                return pcm
+            p2 = await asyncio.create_subprocess_exec(
+                'ffmpeg', '-nostdin', '-v', 'error', '-threads', '1', '-i', str(mp3_tmp),
+                '-ar', '24000', '-ac', '1', '-f', 's16le', 'pipe:1',
+                stdout=asyncio.subprocess.PIPE, stderr=asyncio.subprocess.DEVNULL,
+            )
+            try:
+                out, _ = await asyncio.wait_for(p2.communicate(), timeout=15)
+            except asyncio.TimeoutError:
+                with contextlib.suppress(ProcessLookupError):
+                    p2.kill()
+                await p2.wait()
+                return pcm
+            if p2.returncode == 0 and out and len(out) <= 2 * 1024 * 1024:
+                pcm.extend(out)
+        finally:
+            with contextlib.suppress(OSError):
+                mp3_tmp.unlink(missing_ok=True)
+        return pcm
+
     async def _synthesize(self, cfg, text):
         tts_url = cfg.get('tts_url') or ''
-        if not tts_url:
-            return False
         try:
             VOICE_DIR.mkdir(mode=0o700, parents=True, exist_ok=True)
-            async with self.session.post(tts_url, json={'text': text, 'character': cfg['voice']},
-                                         allow_redirects=False,
-                                         timeout=aiohttp.ClientTimeout(total=30, sock_connect=8)) as r:
-                pcm = bytearray()
-                if r.status == 200:
-                    async for chunk in r.content.iter_chunked(65536):
-                        pcm.extend(chunk)
-                        if len(pcm) > 2 * 1024 * 1024:
-                            return False
-                status = r.status
+            if tts_url:
+                async with self.session.post(tts_url, json={'text': text, 'character': cfg['voice']},
+                                             allow_redirects=False,
+                                             timeout=aiohttp.ClientTimeout(total=30, sock_connect=8)) as r:
+                    pcm = bytearray()
+                    if r.status == 200:
+                        async for chunk in r.content.iter_chunked(65536):
+                            pcm.extend(chunk)
+                            if len(pcm) > 2 * 1024 * 1024:
+                                return False
+                    status = r.status
+            else:
+                pcm = await self._synthesize_builtin_edge(text, cfg.get('voice') or '')
+                status = 200 if len(pcm) > 4800 else 'edge-fallback'
             if len(pcm) > 4800 and len(pcm) % 2 == 0:
                 dst = self.phrase_file(text, cfg.get('voice'))
                 tmp = dst.parent / f'.{dst.name}.{os.getpid()}.{threading.get_ident()}.tmp'
