@@ -302,22 +302,22 @@ def _norm_ambient_arg(raw, default: str = '', allow_recipes: bool = True) -> str
 MUSIC_TOOLS = [
     {
         'name': 'self.music.play',
-        'description': '使用独立QQ音乐服务播放歌曲、歌手、热歌榜、我喜欢的歌、个人歌单或U盘音乐。当用户说「播放周杰伦的晴天」「放首歌」「播放我喜欢的音乐」「播放我的Kpop歌单」「播放U盘里的歌」时调用。',
+        'description': '使用独立音乐与电台服务播放歌曲、歌手、排行榜、我喜欢的歌、个人歌单、U盘音乐，或播放高音质音乐电台（音乐之声/怀旧金曲广播/亚洲音乐台/亚洲经典台/亚洲粤语台/亚洲热歌台/上海动感101/上海最爱103.7/广东音乐之声/深圳飞扬971/北京音乐97.4/怀旧好声音/经典音乐台/上海经典947/爵士轻音乐台/古典音乐广播/欧美金曲电台/浙江动听968/江苏经典流行/四川岷江音乐/内蒙音乐之声/内蒙草原之声/香港电台二台/澳门绿邨电台等）、全国与省市广播（中国之声/经济之声/天津相声广播/北京交通103.9/上海新闻广播/广东新闻广播/浙江交通之声/大湾区之声/香港电台一台普通话台等）、少儿故事与英语名著（米小圈上学记/牛津树英语/新概念英语/唐诗三百首/声律启蒙/福尔摩斯探案/红楼梦有声书/凯叔讲故事/成语故事/十万个为什么/恐龙探险故事/西游记故事/睡前故事等，支持自动断点续播）、相声评书（郭德纲相声/岳云鹏相声/马三立/刘宝瑞单口/单田芳评书/三国演义评书/水浒传评书/刘兰芳岳飞传/杨家将/三侠五义包公等）。当用户说「播放周杰伦的晴天」「放音乐电台」「放亚洲音乐台」「放爵士轻音乐台」「放中国之声」「放天津相声广播」「放上海新闻广播」「讲个儿童故事」「放米小圈」「放牛津树英语」「来段郭德纲相声」「继续听三国演义评书」时调用。',
         'inputSchema': {
             'type': 'object',
             'properties': {
-                'query': {'type': 'string', 'description': '歌名、歌手名、歌单名或指令，随机填 random'},
+                'query': {'type': 'string', 'description': '歌名、歌手名、歌单名、电台/故事/评书名（如音乐之声/亚洲音乐台/怀旧金曲广播/爵士轻音乐台/中国之声/天津相声广播/上海新闻广播/米小圈/牛津树英语/郭德纲相声/三国演义评书）或指令，随机填 random'},
             },
             'required': ['query'],
         },
     },
     {
         'name': 'self.music.control',
-        'description': '控制QQ音乐播放：暂停(pause)、继续(resume)、停止(stop)、下一首(next)、上一首(prev)、单曲循环(single)、列表循环(loop)、随机播放(shuffle)、打开音乐界面(open_ui)。',
+        'description': '控制音乐与电台播放：暂停(pause)、继续(resume)、停止(stop)、下一首/下一台(next)、上一首/上一台(prev)、单曲循环(single)、列表循环(loop)、随机播放(shuffle)、打开音乐界面(open_ui)、打开电台界面(open_radio)。',
         'inputSchema': {
             'type': 'object',
             'properties': {
-                'action': {'type': 'string', 'enum': ['pause', 'resume', 'stop', 'next', 'prev', 'single', 'loop', 'shuffle', 'open_ui']},
+                'action': {'type': 'string', 'enum': ['pause', 'resume', 'stop', 'next', 'prev', 'single', 'loop', 'shuffle', 'open_ui', 'open_radio']},
             },
             'required': ['action'],
         },

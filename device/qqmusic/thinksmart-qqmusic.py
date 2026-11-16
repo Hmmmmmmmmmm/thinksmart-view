@@ -543,8 +543,9 @@ _SAFE_FFMPEG_URL_CACHE = {}
 _SAFE_FFMPEG_URL_LOCK = threading.Lock()
 
 
-def _resolve_safe_ffmpeg_url(url: str, hdrs: dict = None) -> str:
+def _resolve_safe_ffmpeg_url(url: str, hdrs: dict = None, is_live: bool = False) -> str:
     cur = (url or '').strip()
+    orig_cur = cur
     if not _is_safe_stream_url(cur):
         return ''
     sp0 = urllib.parse.urlsplit(cur)
@@ -563,7 +564,7 @@ def _resolve_safe_ffmpeg_url(url: str, hdrs: dict = None) -> str:
     now_m = time.monotonic()
     with _SAFE_FFMPEG_URL_LOCK:
         hit = _SAFE_FFMPEG_URL_CACHE.get(cache_key)
-    if hit and (now_m - hit[0]) < 600.0:
+    if hit and (now_m - hit[0]) < (3600.0 if hit[1] == orig_cur else 240.0):
         hit_host = urllib.parse.urlsplit(hit[1]).hostname or ''
         if _is_safe_stream_url(hit[1]) and _has_only_global_ips(hit_host):
             return hit[1]
@@ -590,7 +591,7 @@ def _resolve_safe_ffmpeg_url(url: str, hdrs: dict = None) -> str:
             return ''
         if code not in (301, 302, 303, 307, 308):
             with _SAFE_FFMPEG_URL_LOCK:
-                if len(_SAFE_FFMPEG_URL_CACHE) >= 32 and cache_key not in _SAFE_FFMPEG_URL_CACHE:
+                if len(_SAFE_FFMPEG_URL_CACHE) >= 128 and cache_key not in _SAFE_FFMPEG_URL_CACHE:
                     _SAFE_FFMPEG_URL_CACHE.pop(next(iter(_SAFE_FFMPEG_URL_CACHE)), None)
                 _SAFE_FFMPEG_URL_CACHE[cache_key] = (time.monotonic(), cur)
             return cur
@@ -608,6 +609,12 @@ def _resolve_safe_ffmpeg_url(url: str, hdrs: dict = None) -> str:
         if _cookie_root(old_sp.hostname or '') != _cookie_root(new_sp.hostname or ''):
             for hk in [k for k in list(cur_hdrs.keys()) if k.lower() in ('cookie', 'authorization')]:
                 cur_hdrs.pop(hk, None)
+        if is_live and new_sp.path.lower().endswith(('.mp3', '.aac', '.m3u8')):
+            with _SAFE_FFMPEG_URL_LOCK:
+                if len(_SAFE_FFMPEG_URL_CACHE) >= 128 and cache_key not in _SAFE_FFMPEG_URL_CACHE:
+                    _SAFE_FFMPEG_URL_CACHE.pop(next(iter(_SAFE_FFMPEG_URL_CACHE)), None)
+                _SAFE_FFMPEG_URL_CACHE[cache_key] = (time.monotonic(), nxt)
+            return nxt
         cur = nxt
     return ''
 
@@ -2176,6 +2183,976 @@ def search_local(query: str = '') -> list:
     return out
 
 
+# ==================== Internet Radio R3: National/Local/HK-MO FM + Playable Kids/English/Crosstalk + Resume & Episodes ====================
+import base64 as _b64
+
+RADIO_CATEGORIES = [
+    {'id': 'all', 'name': '全部精选'},
+    {'id': 'fm', 'name': '全国广播'},
+    {'id': 'music_fm', 'name': '音乐电台'},
+    {'id': 'kids', 'name': '故事英语'},
+    {'id': 'crosstalk', 'name': '相声评书'},
+    {'id': 'fav', 'name': '收藏电台'},
+]
+
+
+def _radio_emblem_uri(bg1: str, bg2: str, accent: str, badge: str, mark: str) -> str:
+    svg = (
+        f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200">'
+        f'<defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">'
+        f'<stop offset="0" stop-color="{bg1}"/><stop offset="1" stop-color="{bg2}"/>'
+        f'</linearGradient></defs>'
+        f'<rect width="200" height="200" rx="28" fill="url(#g)"/>'
+        f'<circle cx="164" cy="38" r="56" fill="none" stroke="{accent}" stroke-opacity="0.16" stroke-width="8"/>'
+        f'<circle cx="164" cy="38" r="32" fill="none" stroke="{accent}" stroke-opacity="0.24" stroke-width="6"/>'
+        f'<rect x="18" y="24" width="92" height="30" rx="15" fill="{accent}" fill-opacity="0.2"/>'
+        f'<text x="64" y="45" text-anchor="middle" fill="{accent}" font-family="Noto Sans CJK SC,sans-serif" font-size="15" font-weight="700">{badge}</text>'
+        f'<text x="100" y="132" text-anchor="middle" fill="#ffffff" font-family="Noto Sans CJK SC,sans-serif" font-size="50" font-weight="700">{mark}</text>'
+        f'</svg>'
+    )
+    return 'data:image/svg+xml;base64,' + _b64.b64encode(svg.encode('utf-8')).decode('ascii')
+
+
+RADIO_STATIONS = [
+    # --- 高品质音乐电台精选 (music_fm, 28 HTTPS AAC/HE-AAC HD Music Stations) ---
+    {
+        'id': 'cnr_yyzs', 'cat': 'music_fm', 'kind': 'live',
+        'title': '音乐之声', 'sub': '央广华语流行金曲伴听', 'badge': '48k 高清', 'mark': '音乐',
+        'colors': ('#13463a', '#0c2420', '#6ff2c5'),
+        'url': 'https://ngcdn001.cnr.cn/live/yyzs/index.m3u8',
+        'aliases': ('音乐之声', '央广音乐之声', 'musicradio', '音乐广播'),
+    },
+    {
+        'id': 'xm_2629', 'cat': 'music_fm', 'kind': 'live',
+        'title': '怀旧金曲广播', 'sub': '80与90年代经典老歌', 'badge': '经典老歌', 'mark': '怀旧',
+        'colors': ('#4a2f1d', '#24170e', '#ffc299'),
+        'url': 'https://live.ximalaya.com/radio-first-page-app/live/2629/64.m3u8',
+        'aliases': ('怀旧金曲', '怀旧金曲广播', '怀旧音乐广播', '老歌电台', '经典老歌电台'),
+    },
+    {
+        'id': 'asia_pop', 'cat': 'music_fm', 'kind': 'live',
+        'title': '亚洲音乐台', 'sub': 'AsiaFM全天无广告热歌', 'badge': 'AsiaFM', 'mark': '亚音',
+        'colors': ('#17444a', '#0c2226', '#7cecf5'),
+        'url': 'https://ls.qingting.fm/live/15318569/64k.m3u8',
+        'aliases': ('亚洲音乐台', 'asiafm', 'asiafm亚洲音乐'),
+    },
+    {
+        'id': 'asia_classic', 'cat': 'music_fm', 'kind': 'live',
+        'title': '亚洲经典台', 'sub': 'AsiaFM岁月华语金曲', 'badge': 'AsiaFM', 'mark': '经典',
+        'colors': ('#4d3419', '#261a0c', '#ffd18a'),
+        'url': 'https://ls.qingting.fm/live/15318341/64k.m3u8',
+        'aliases': ('亚洲经典台', 'asiafm亚洲经典', '亚洲经典音乐台'),
+    },
+    {
+        'id': 'asia_yue', 'cat': 'music_fm', 'kind': 'live',
+        'title': '亚洲粤语台', 'sub': 'AsiaFM全天纯正港乐', 'badge': '粤语金曲', 'mark': '粤歌',
+        'colors': ('#472139', '#24101d', '#ffa3d4'),
+        'url': 'https://ls.qingting.fm/live/15318703/64k.m3u8',
+        'aliases': ('亚洲粤语台', '粤语音乐台', '粤语金曲电台', '港乐电台'),
+    },
+    {
+        'id': 'asia_hit', 'cat': 'music_fm', 'kind': 'live',
+        'title': '亚洲热歌台', 'sub': 'AsiaFM潮流新歌热单', 'badge': '潮流热歌', 'mark': '热歌',
+        'colors': ('#521f2c', '#291016', '#ff9eb5'),
+        'url': 'https://ls.qingting.fm/live/20500149/64k.m3u8',
+        'aliases': ('亚洲热歌台', '流行热歌电台', '热歌电台'),
+    },
+    {
+        'id': 'sh_1017', 'cat': 'music_fm', 'kind': 'live',
+        'title': '上海动感101', 'sub': '华语流行热歌FM101.7', 'badge': 'FM 101.7', 'mark': '101',
+        'colors': ('#521f38', '#290f1c', '#ff9ec9'),
+        'url': 'https://ls.qingting.fm/live/274/64k.m3u8',
+        'aliases': ('上海动感101', '动感101'),
+    },
+    {
+        'id': 'sh_1037', 'cat': 'music_fm', 'kind': 'live',
+        'title': '上海最爱103.7', 'sub': 'LoveRadio经典情歌台', 'badge': 'FM 103.7', 'mark': '最爱',
+        'colors': ('#4f2234', '#26111a', '#ffa6c4'),
+        'url': 'https://ls.qingting.fm/live/273/64k.m3u8',
+        'aliases': ('上海最爱103.7', 'loveradio', '上海loveradio', '最爱调频'),
+    },
+    {
+        'id': 'gd_993', 'cat': 'music_fm', 'kind': 'live',
+        'title': '广东音乐之声', 'sub': '粤语华语发烧金曲99.3', 'badge': 'FM 99.3', 'mark': '粤乐',
+        'colors': ('#1a453e', '#0d2420', '#7cf0dc'),
+        'url': 'https://ls.qingting.fm/live/1260/64k.m3u8',
+        'aliases': ('广东音乐之声', 'fm993'),
+    },
+    {
+        'id': 'sz_971', 'cat': 'music_fm', 'kind': 'live',
+        'title': '深圳飞扬971', 'sub': '鹏城潮流流行金曲台', 'badge': 'FM 97.1', 'mark': '飞扬',
+        'colors': ('#1b3d59', '#0d1f2e', '#8acbff'),
+        'url': 'https://ls.qingting.fm/live/1271/64k.m3u8',
+        'aliases': ('深圳飞扬971', '飞扬971', '深圳音乐广播'),
+    },
+    {
+        'id': 'bj_974', 'cat': 'music_fm', 'kind': 'live',
+        'title': '北京音乐97.4', 'sub': '首都流行欧美金曲97.4', 'badge': '48k 高清', 'mark': '京乐',
+        'colors': ('#2a3359', '#151a2e', '#a6baff'),
+        'url': 'https://brtv-radiolive.rbc.cn/alive/fm974.m3u8',
+        'aliases': ('北京音乐广播', '北京音乐台', 'fm974'),
+    },
+    {
+        'id': 'qt_4875', 'cat': 'music_fm', 'kind': 'live',
+        'title': '怀旧好声音', 'sub': '年代经典华语老歌连播', 'badge': '岁月金曲', 'mark': '留声',
+        'colors': ('#4a3219', '#24180c', '#ffd096'),
+        'url': 'https://ls.qingting.fm/live/4875/64k.m3u8',
+        'aliases': ('怀旧好声音', '年代经典电台'),
+    },
+    {
+        'id': 'cnr_dszs', 'cat': 'music_fm', 'kind': 'live',
+        'title': '经典音乐台', 'sub': '央广交响古典名曲赏析', 'badge': '48k 古典', 'mark': '古典',
+        'colors': ('#1e2f5c', '#101830', '#9ec2ff'),
+        'url': 'https://ngcdn001.cnr.cn/live/dszs/index.m3u8',
+        'aliases': ('经典音乐广播', '经典音乐台', '古典音乐台'),
+    },
+    {
+        'id': 'sh_947', 'cat': 'music_fm', 'kind': 'live',
+        'title': '上海经典947', 'sub': '交响室内乐轻音乐调频', 'badge': 'FM 94.7', 'mark': '947',
+        'colors': ('#283257', '#14192b', '#a8baff'),
+        'url': 'https://ls.qingting.fm/live/267/64k.m3u8',
+        'aliases': ('上海经典947', '经典947'),
+    },
+    {
+        'id': 'qt_jazz', 'cat': 'music_fm', 'kind': 'live',
+        'title': '爵士轻音乐台', 'sub': '慵懒爵士与午后纯音乐', 'badge': '爵士纯音', 'mark': '爵士',
+        'colors': ('#2e284d', '#171426', '#c2b3ff'),
+        'url': 'https://ls.qingting.fm/live/5022308/64k.m3u8',
+        'aliases': ('爵士轻音乐台', '爵士电台', '轻音乐电台', '纯音乐电台'),
+    },
+    {
+        'id': 'qt_4804', 'cat': 'music_fm', 'kind': 'live',
+        'title': '古典音乐广播', 'sub': '钢琴协奏与古典纯音', 'badge': '古典纯音', 'mark': '琴韵',
+        'colors': ('#243554', '#121a29', '#9ec2ff'),
+        'url': 'https://ls.qingting.fm/live/4804/64k.m3u8',
+        'aliases': ('古典音乐广播', '钢琴电台'),
+    },
+    {
+        'id': 'qt_4915', 'cat': 'music_fm', 'kind': 'live',
+        'title': '欧美金曲电台', 'sub': '欧美流行热单与经典', 'badge': '欧美流行', 'mark': '欧美',
+        'colors': ('#1c3b57', '#0e1d2b', '#8ccaff'),
+        'url': 'https://ls.qingting.fm/live/4915/64k.m3u8',
+        'aliases': ('欧美金曲电台', '欧美音乐台', '英文歌电台'),
+    },
+    {
+        'id': 'cri_nhzs', 'cat': 'music_fm', 'kind': 'live',
+        'title': '南海之声', 'sub': '清新华语轻音乐伴听', 'badge': '48k 轻音', 'mark': '南海',
+        'colors': ('#174540', '#0c2421', '#80f2e2'),
+        'url': 'https://sk.cri.cn/nhzs.m3u8',
+        'aliases': ('南海之声', '南海轻音乐'),
+    },
+    {
+        'id': 'zj_968', 'cat': 'music_fm', 'kind': 'live',
+        'title': '浙江动听968', 'sub': '华东旗舰潮流音乐调频', 'badge': 'FM 96.8', 'mark': '动听',
+        'colors': ('#19453c', '#0d241f', '#7ef0d6'),
+        'url': 'https://ls.qingting.fm/live/4866/64k.m3u8',
+        'aliases': ('浙江动听968', '浙江音乐调频', '动听968'),
+    },
+    {
+        'id': 'js_975', 'cat': 'music_fm', 'kind': 'live',
+        'title': '江苏经典流行', 'sub': '岁月金曲伴听FM97.5', 'badge': 'FM 97.5', 'mark': '苏乐',
+        'colors': ('#3d3319', '#1f1a0c', '#f5d487'),
+        'url': 'https://ls.qingting.fm/live/4938/64k.m3u8',
+        'aliases': ('江苏经典流行', '江苏经典流行音乐'),
+    },
+    {
+        'id': 'js_897', 'cat': 'music_fm', 'kind': 'live',
+        'title': '江苏魅力897', 'sub': '热歌新曲活力调频89.7', 'badge': 'FM 89.7', 'mark': '897',
+        'colors': ('#47243d', '#24121f', '#f5a8de'),
+        'url': 'https://ls.qingting.fm/live/4936/64k.m3u8',
+        'aliases': ('江苏魅力897', '江苏音乐广播', '魅力897'),
+    },
+    {
+        'id': 'sc_955', 'cat': 'music_fm', 'kind': 'live',
+        'title': '四川岷江音乐', 'sub': '西南流行金曲FM95.5', 'badge': 'FM 95.5', 'mark': '岷江',
+        'colors': ('#1a473a', '#0d241d', '#80f0cb'),
+        'url': 'https://ls.qingting.fm/live/1111/64k.m3u8',
+        'aliases': ('四川岷江音乐', '岷江音乐台', '岷江音乐广播'),
+    },
+    {
+        'id': 'cq_1947', 'cat': 'music_fm', 'kind': 'live',
+        'title': '重庆音乐广播', 'sub': '山城潮流金曲FM88.1', 'badge': 'FM 88.1', 'mark': '渝乐',
+        'colors': ('#4f251e', '#26120f', '#ffab9c'),
+        'url': 'https://ls.qingting.fm/live/1947/64k.m3u8',
+        'aliases': ('重庆音乐广播', '重庆音乐台'),
+    },
+    {
+        'id': 'cs_886', 'cat': 'music_fm', 'kind': 'live',
+        'title': '长沙音乐88.6', 'sub': '湘江青春流行热歌调频', 'badge': 'FM 88.6', 'mark': '湘乐',
+        'colors': ('#4d2922', '#261411', '#ffb3a3'),
+        'url': 'https://ls.qingting.fm/live/4969/64k.m3u8',
+        'aliases': ('长沙音乐88.6', '长沙音乐广播'),
+    },
+    {
+        'id': 'nm_yyzs', 'cat': 'music_fm', 'kind': 'live',
+        'title': '内蒙音乐之声', 'sub': '草原流行热歌FM93.6', 'badge': '内蒙93.6', 'mark': '蒙乐',
+        'colors': ('#1b4540', '#0d2420', '#80f0de'),
+        'url': 'https://ls.qingting.fm/live/1886/64k.m3u8',
+        'aliases': ('内蒙音乐之声', '内蒙古音乐之声', '内蒙古音乐广播'),
+    },
+    {
+        'id': 'nm_cyzs', 'cat': 'music_fm', 'kind': 'live',
+        'title': '内蒙草原之声', 'sub': '天籁长调民歌与草原情', 'badge': '草原天籁', 'mark': '草原',
+        'colors': ('#214726', '#102413', '#96f0a2'),
+        'url': 'https://ls.qingting.fm/live/20973/64k.m3u8',
+        'aliases': ('内蒙草原之声', '内蒙古草原之声', '草原之声'),
+    },
+    {
+        'id': 'hk_rthk2', 'cat': 'music_fm', 'kind': 'live',
+        'title': '香港电台二台', 'sub': 'RTHK港乐流行文化台', 'badge': 'RTHK 2', 'mark': '港二',
+        'colors': ('#253459', '#121a2e', '#a3bdff'),
+        'url': 'https://rthkradio2-live.akamaized.net/hls/live/2040078/radio2/index_64_a.m3u8',
+        'aliases': ('香港电台第二台', '香港电台二台', '香港二台', 'rthk2'),
+    },
+    {
+        'id': 'mo_fm995', 'cat': 'music_fm', 'kind': 'live',
+        'title': '澳门绿邨电台', 'sub': '澳门FM99.5粤语金曲台', 'badge': '澳门99.5', 'mark': '澳门',
+        'colors': ('#1b4532', '#0d241a', '#85f0bd'),
+        'url': 'https://macaofm995.com/hls1/fm995.m3u8',
+        'aliases': ('澳门电台', '澳门绿邨电台', '绿邨电台', '澳门广播'),
+    },
+
+    # --- 全国与本地综合广播电台 (fm, 22 HTTPS AAC/HE-AAC Stations) ---
+    {
+        'id': 'cnr_zgzs', 'cat': 'fm', 'kind': 'live',
+        'title': '中国之声', 'sub': '央广权威新闻综合频率', 'badge': '央广新闻', 'mark': '央广',
+        'colors': ('#5c1d24', '#2b1015', '#ff9b9b'),
+        'url': 'https://ngcdn001.cnr.cn/live/zgzs/index.m3u8',
+        'aliases': ('中国之声', '央广新闻', '新闻广播', '中央人民广播电台'),
+    },
+    {
+        'id': 'cnr_jjzs', 'cat': 'fm', 'kind': 'live',
+        'title': '经济之声', 'sub': '财经资讯与市场观察', 'badge': '财经 FM', 'mark': '财经',
+        'colors': ('#4d3614', '#261b0a', '#ffd27d'),
+        'url': 'https://ngcdn001.cnr.cn/live/jjzs/index.m3u8',
+        'aliases': ('经济之声', '财经广播', '天下财经'),
+    },
+    {
+        'id': 'tj_xiangsheng', 'cat': 'fm', 'kind': 'live',
+        'title': '天津相声广播', 'sub': 'FM92.1全天名家相声台', 'badge': 'FM 92.1', 'mark': '津相',
+        'colors': ('#54251c', '#29120e', '#ffab99'),
+        'url': 'https://ls.qingting.fm/live/336/64k.m3u8',
+        'aliases': ('天津相声广播', '相声广播', 'fm921', '天津相声台'),
+    },
+    {
+        'id': 'bj_1039', 'cat': 'fm', 'kind': 'live',
+        'title': '北京交通103.9', 'sub': '王牌路况与汽车脱口秀', 'badge': 'FM 103.9', 'mark': '交通',
+        'colors': ('#1b3e59', '#0d1f2e', '#82d4ff'),
+        'url': 'https://brtv-radiolive.rbc.cn/alive/fm1039.m3u8',
+        'aliases': ('北京交通广播', '北京交通1039', '北京交通台', '1039交通广播'),
+    },
+    {
+        'id': 'cnr_wyzs', 'cat': 'fm', 'kind': 'live',
+        'title': '文艺之声', 'sub': '小说联播与人文品读', 'badge': '文艺 FM', 'mark': '文艺',
+        'colors': ('#3d2452', '#1d1228', '#d9a8ff'),
+        'url': 'https://ngcdn001.cnr.cn/live/wyzs/index.m3u8',
+        'aliases': ('文艺之声', '文艺广播'),
+    },
+    {
+        'id': 'cri_hqzx', 'cat': 'fm', 'kind': 'live',
+        'title': '环球资讯', 'sub': '24小时全球整点快讯', 'badge': '国际台', 'mark': '环球',
+        'colors': ('#173f52', '#0c202b', '#7fd8ff'),
+        'url': 'https://sk.cri.cn/905.m3u8',
+        'aliases': ('环球资讯', '环球资讯广播', '国际新闻广播'),
+    },
+    {
+        'id': 'bj_1006', 'cat': 'fm', 'kind': 'live',
+        'title': '北京新闻100.6', 'sub': '即时新闻与民生热点', 'badge': 'FM 100.6', 'mark': '京闻',
+        'colors': ('#542520', '#291210', '#ffa599'),
+        'url': 'https://brtv-radiolive.rbc.cn/alive/fm1006.m3u8',
+        'aliases': ('北京新闻广播', '北京新闻台'),
+    },
+    {
+        'id': 'bj_876', 'cat': 'fm', 'kind': 'live',
+        'title': '北京文艺87.6', 'sub': '广播剧小说与相声联播', 'badge': 'FM 87.6', 'mark': '京艺',
+        'colors': ('#45284d', '#221426', '#e2abff'),
+        'url': 'https://brtv-radiolive.rbc.cn/alive/fm876.m3u8',
+        'aliases': ('北京文艺广播', '北京文艺台'),
+    },
+    {
+        'id': 'gd_1262', 'cat': 'fm', 'kind': 'live',
+        'title': '广东珠江经济', 'sub': '粤语民生财经第一台', 'badge': 'FM 97.4', 'mark': '珠江',
+        'colors': ('#473318', '#24190c', '#ffd08a'),
+        'url': 'https://ls.qingting.fm/live/1262/64k.m3u8',
+        'aliases': ('珠江经济台', '广东珠江经济', '珠江台'),
+    },
+    {
+        'id': 'cnr_xczs', 'cat': 'fm', 'kind': 'live',
+        'title': '中国乡村之声', 'sub': '民生乡情与戏曲曲艺', 'badge': '央广民生', 'mark': '乡音',
+        'colors': ('#2e4720', '#172410', '#a6eb8a'),
+        'url': 'https://ngcdn001.cnr.cn/live/xczs/index.m3u8',
+        'aliases': ('中国乡村之声', '乡村之声'),
+    },
+    {
+        'id': 'cnr_lnzs', 'cat': 'fm', 'kind': 'live',
+        'title': '老年之声', 'sub': '健康养生与经典戏曲', 'badge': '长辈 FM', 'mark': '养生',
+        'colors': ('#4a2c1d', '#24150e', '#ffb894'),
+        'url': 'https://ngcdn001.cnr.cn/live/lnzs/index.m3u8',
+        'aliases': ('老年之声', '长辈电台'),
+    },
+    {
+        'id': 'cri_hyhq', 'cat': 'fm', 'kind': 'live',
+        'title': '华语环球广播', 'sub': '全球华人时事与文化', 'badge': '国际台', 'mark': '华语',
+        'colors': ('#1c3f47', '#0e2024', '#8ce6f5'),
+        'url': 'https://sk.cri.cn/hyhq.m3u8',
+        'aliases': ('华语环球', '华语环球广播'),
+    },
+    {
+        'id': 'sh_990', 'cat': 'fm', 'kind': 'live',
+        'title': '上海新闻广播', 'sub': '长三角权威新闻民生调频', 'badge': 'FM 93.4', 'mark': '沪闻',
+        'colors': ('#522420', '#291210', '#ffa89e'),
+        'url': 'https://ls.qingting.fm/live/270/64k.m3u8',
+        'aliases': ('上海新闻广播', '上海新闻台', 'fm934'),
+    },
+    {
+        'id': 'gd_914', 'cat': 'fm', 'kind': 'live',
+        'title': '广东新闻广播', 'sub': '南粤即时资讯与民生观察', 'badge': 'FM 91.4', 'mark': '粤闻',
+        'colors': ('#174736', '#0c241b', '#7ef2c2'),
+        'url': 'https://ls.qingting.fm/live/1254/64k.m3u8',
+        'aliases': ('广东新闻广播', '广东新闻台', 'fm914'),
+    },
+    {
+        'id': 'zj_93', 'cat': 'fm', 'kind': 'live',
+        'title': '浙江交通之声', 'sub': '智慧高速路况与出行伴听', 'badge': 'FM 93', 'mark': '浙交',
+        'colors': ('#45284d', '#221426', '#e0abff'),
+        'url': 'https://ls.qingting.fm/live/4522/64k.m3u8',
+        'aliases': ('浙江交通之声', '浙江交通广播', 'fm93', '本地广播', '本地电台'),
+    },
+    {
+        'id': 'nm_xwzh', 'cat': 'fm', 'kind': 'live',
+        'title': '内蒙新闻综合', 'sub': '内蒙古权威新闻与政风', 'badge': '内蒙新闻', 'mark': '蒙闻',
+        'colors': ('#54231e', '#29110f', '#ffa399'),
+        'url': 'https://ls.qingting.fm/live/1883/64k.m3u8',
+        'aliases': ('内蒙新闻综合', '内蒙古新闻广播', '内蒙古新闻综合广播', '内蒙古广播'),
+    },
+    {
+        'id': 'nm_jtzs', 'cat': 'fm', 'kind': 'live',
+        'title': '内蒙交通之声', 'sub': '全区高速路况出行伴听', 'badge': '内蒙105.6', 'mark': '蒙交',
+        'colors': ('#1b3d54', '#0d1f2b', '#87d4ff'),
+        'url': 'https://ls.qingting.fm/live/1884/64k.m3u8',
+        'aliases': ('内蒙交通之声', '内蒙古交通之声', '内蒙古交通广播'),
+    },
+    {
+        'id': 'cnr_dwq', 'cat': 'fm', 'kind': 'live',
+        'title': '大湾区之声', 'sub': '粤语资讯与湾区民生', 'badge': '粤港澳', 'mark': '湾区',
+        'colors': ('#194247', '#0d2226', '#7ce8f0'),
+        'url': 'https://ngcdn001.cnr.cn/live/hxzs/index.m3u8',
+        'aliases': ('大湾区之声', '粤语广播'),
+    },
+    {
+        'id': 'cnr_xgzs', 'cat': 'fm', 'kind': 'live',
+        'title': '央广香港之声', 'sub': '香江民生与湾区快讯', 'badge': '香港 FM', 'mark': '香江',
+        'colors': ('#4d2238', '#26111c', '#ffa3cf'),
+        'url': 'https://ngcdn001.cnr.cn/live/xgzs/index.m3u8',
+        'aliases': ('香港之声', '央广香港之声'),
+    },
+    {
+        'id': 'hk_rthk1', 'cat': 'fm', 'kind': 'live',
+        'title': '香港电台一台', 'sub': 'RTHK粤语新闻与时事', 'badge': 'RTHK 1', 'mark': '港一',
+        'colors': ('#4f271d', '#26130e', '#ffb099'),
+        'url': 'https://rthkradio1-live.akamaized.net/hls/live/2035313/radio1/index_64_a.m3u8',
+        'aliases': ('香港电台第一台', '香港电台一台', '香港一台', 'rthk1'),
+    },
+    {
+        'id': 'hk_rthk_pth', 'cat': 'fm', 'kind': 'live',
+        'title': '香港普通话台', 'sub': 'RTHK普通话财经与民生', 'badge': 'RTHK 普', 'mark': '港普',
+        'colors': ('#3d2b52', '#1f1629', '#cfb0ff'),
+        'url': 'https://rthkradiopth-live.akamaized.net/hls/live/2040082/radiopth/index_64_a.m3u8',
+        'aliases': ('香港普通话台', '香港电台普通话台', 'rthk普通话'),
+    },
+    {
+        'id': 'hk_metro_info', 'cat': 'fm', 'kind': 'live',
+        'title': '香港新城知讯', 'sub': '香港都会流行与生活', 'badge': '新城997', 'mark': '知讯',
+        'colors': ('#1c424d', '#0e2226', '#85e3ff'),
+        'url': 'https://1603884249.rsc.cdn77.org/1603884249/index.m3u8',
+        'aliases': ('香港新城知讯台', '新城知讯台', '新城电台'),
+    },
+
+    # --- 少儿故事 · 校园名著 · 英语磨耳朵 (kids, 16 playable channels) ---
+    {
+        'id': 'kids_mixiaoquan', 'cat': 'kids', 'kind': 'channel',
+        'title': '米小圈上学记', 'sub': '幽默小学生校园故事', 'badge': '校园故事', 'mark': '米圈',
+        'colors': ('#4f3417', '#26190b', '#ffd08a'),
+        'queries': ['米小圈上学记 DJ长音频', '米小圈上学记'], 'min_dur': 90, 'sort_ep': True,
+        'aliases': ('米小圈', '米小圈上学记', '校园故事'),
+    },
+    {
+        'id': 'kids_oxford', 'cat': 'kids', 'kind': 'channel',
+        'title': '牛津树英语', 'sub': '60集分级绘本磨耳朵', 'badge': '英语启蒙', 'mark': '牛津',
+        'colors': ('#183e54', '#0c202b', '#87d9ff'),
+        'album_mids': ['001uRIKL27FDqL'], 'queries': ['牛津阅读树 英语'], 'min_dur': 60, 'sort_ep': True,
+        'aliases': ('牛津树', '牛津树英语', '牛津阅读树', '英语绘本'),
+    },
+    {
+        'id': 'kids_nce', 'cat': 'kids', 'kind': 'channel',
+        'title': '新概念英语', 'sub': '第一册逐课连播磨耳朵', 'badge': '英语课文', 'mark': '新概',
+        'colors': ('#1e3459', '#0f1a2e', '#9ebdff'),
+        'album_mids': ['000Gzql346y1FI'], 'queries': ['新概念英语第一册课文朗读'], 'min_dur': 45, 'sort_ep': True,
+        'aliases': ('新概念英语', '新概念课文', '英语朗读'),
+    },
+    {
+        'id': 'kids_en_listen', 'cat': 'kids', 'kind': 'channel',
+        'title': '趣味英语绘本', 'sub': '英文经典小故事磨耳朵', 'badge': '英语故事', 'mark': '绘本',
+        'colors': ('#194542', '#0d2422', '#82f0e6'),
+        'queries': ['英语绘本故事 儿童', '少儿英语启蒙 多彩故事树', '少儿英语故事'], 'min_dur': 55, 'sort_ep': True,
+        'aliases': ('趣味英语听力', '趣味英语绘本', '英语听力', '英语磨耳朵', '少儿英语'),
+    },
+    {
+        'id': 'kids_poem', 'cat': 'kids', 'kind': 'channel',
+        'title': '唐诗三百首', 'sub': '亲子读古诗60集精讲', 'badge': '国学古诗', 'mark': '唐诗',
+        'colors': ('#453520', '#241b10', '#f5cf93'),
+        'album_mids': ['001eWBcC0Xc0iq'], 'queries': ['唐诗三百首 儿童朗读'], 'min_dur': 28, 'sort_ep': True,
+        'aliases': ('唐诗三百首', '古诗词朗读', '唐诗笠翁对韵', '读古诗'),
+    },
+    {
+        'id': 'kids_shenglv', 'cat': 'kids', 'kind': 'channel',
+        'title': '声律启蒙笠翁', 'sub': '云对雨雪对风韵律诵读', 'badge': '国学韵律', 'mark': '声律',
+        'colors': ('#3d3422', '#1f1a11', '#f0d399'),
+        'album_mids': ['0009KnHt0UNSAI'], 'queries': ['声律启蒙 笠翁对韵 儿童'], 'min_dur': 65, 'sort_ep': True,
+        'aliases': ('声律启蒙', '笠翁对韵', '声律启蒙笠翁'),
+    },
+    {
+        'id': 'kids_holmes', 'cat': 'kids', 'kind': 'channel',
+        'title': '福尔摩斯探案', 'sub': '经典悬疑推理名著连播', 'badge': '必读名著', 'mark': '探案',
+        'colors': ('#2e364f', '#171b29', '#adc2ff'),
+        'queries': ['福尔摩斯探案 DJ长音频', '福尔摩斯探案集 血字的研究', '福尔摩斯探案 有声'],
+        'min_dur': 150, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('福尔摩斯', '福尔摩斯探案', '福尔摩斯探案集'),
+    },
+    {
+        'id': 'kids_honglou', 'cat': 'kids', 'kind': 'channel',
+        'title': '红楼梦有声书', 'sub': '古典文学必读名著朗读', 'badge': '必读名著', 'mark': '红楼',
+        'colors': ('#52212d', '#291017', '#ffa3b8'),
+        'queries': ['红楼梦 原著朗读', '红楼梦 有声小说'], 'exclude_kw': ('京华烟云',),
+        'min_dur': 300, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('红楼梦', '红楼梦有声书', '红楼梦朗读'),
+    },
+    {
+        'id': 'kids_kaishu', 'cat': 'kids', 'kind': 'channel',
+        'title': '凯叔讲故事', 'sub': '经典古诗探案与童话', 'badge': '儿童故事', 'mark': '凯叔',
+        'colors': ('#1c4538', '#0f261f', '#7ef2c4'),
+        'queries': ['凯叔 声律启蒙', '凯叔讲故事', '猴子警长探案记'], 'min_dur': 75, 'sort_ep': False,
+        'aliases': ('凯叔讲故事', '凯叔'),
+    },
+    {
+        'id': 'kids_fairy', 'cat': 'kids', 'kind': 'channel',
+        'title': '世界经典童话', 'sub': '格林与安徒生童话集', 'badge': '经典童话', 'mark': '童话',
+        'colors': ('#46264d', '#231326', '#ebb0ff'),
+        'queries': ['格林童话', '安徒生童话 儿童故事'], 'min_dur': 90, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('世界经典童话', '经典童话', '格林童话', '安徒生童话', '童话故事'),
+    },
+    {
+        'id': 'kids_idiom', 'cat': 'kids', 'kind': 'channel',
+        'title': '中华成语故事', 'sub': '爆笑父与子学成语60集', 'badge': '国学启蒙', 'mark': '成语',
+        'colors': ('#4f3417', '#26190b', '#ffd08a'),
+        'album_mids': ['004SDvW536t7Jd'], 'queries': ['成语故事 儿童'], 'min_dur': 80, 'sort_ep': True,
+        'aliases': ('成语故事', '中华成语故事'),
+    },
+    {
+        'id': 'kids_why', 'cat': 'kids', 'kind': 'channel',
+        'title': '十万个为什么', 'sub': '趣味少儿科学百科问答', 'badge': '少儿科普', 'mark': '科普',
+        'colors': ('#183e54', '#0c202b', '#87d9ff'),
+        'queries': ['十万个为什么 儿童', '科学故事 儿童'], 'min_dur': 90, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('十万个为什么', '科普故事', '少儿科普'),
+    },
+    {
+        'id': 'kids_dino', 'cat': 'kids', 'kind': 'channel',
+        'title': '恐龙探险故事', 'sub': '霸王龙与火山龙历险记', 'badge': '恐龙百科', 'mark': '恐龙',
+        'colors': ('#1f472a', '#102415', '#8ef0a8'),
+        'album_mids': ['002h0npW2NggJQ'], 'queries': ['恐龙故事 宝宝巴士'], 'min_dur': 80, 'sort_ep': True,
+        'aliases': ('恐龙故事', '恐龙探险故事', '霸王龙故事'),
+    },
+    {
+        'id': 'kids_xiyou', 'cat': 'kids', 'kind': 'channel',
+        'title': '西游记故事', 'sub': '孙悟空大闹天宫连播', 'badge': '名著故事', 'mark': '西游',
+        'colors': ('#57261c', '#2b130e', '#ffa38f'),
+        'queries': ['西游记 少儿故事', '西游记 宝宝巴士', '孙悟空 故事 儿童'],
+        'exclude_kw': ('跳舞', '儿歌dj'), 'min_dur': 110, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('西游记故事', '西游记少儿故事', '孙悟空故事'),
+    },
+    {
+        'id': 'kids_history', 'cat': 'kids', 'kind': 'channel',
+        'title': '上下五千年', 'sub': '华夏历史名人典故连播', 'badge': '历史故事', 'mark': '历史',
+        'colors': ('#453520', '#241b10', '#f5cf93'),
+        'queries': ['中华上下五千年 故事', '中国历史故事 儿童'], 'min_dur': 180, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('中华上下五千年', '历史故事', '上下五千年'),
+    },
+    {
+        'id': 'kids_bedtime', 'cat': 'kids', 'kind': 'channel',
+        'title': '温馨睡前故事', 'sub': '60集轻柔晚安故事伴眠', 'badge': '晚安伴睡', 'mark': '晚安',
+        'colors': ('#252c54', '#13172b', '#abbaff'),
+        'album_mids': ['000z64vU0thjpb'], 'queries': ['宝宝巴士 睡前故事'], 'min_dur': 80, 'sort_ep': False,
+        'aliases': ('睡前故事', '晚安故事', '温馨睡前故事'),
+    },
+
+    # --- 相声与名家评书 (crosstalk, 10 playable channels) ---
+    {
+        'id': 'ct_guodegang', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '郭德纲相声', 'sub': '德云社经典对口长篇', 'badge': '经典相声', 'mark': '德云',
+        'colors': ('#54231c', '#29110d', '#ffa696'),
+        'queries': ['郭德纲 于谦 相声', '郭德纲 相声 经典'], 'min_dur': 300, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('郭德纲', '郭德纲相声', '于谦', '德云社', '德云社相声'),
+    },
+    {
+        'id': 'ct_yueyunpeng', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '岳云鹏相声', 'sub': '妙言趣语欢快相声专场', 'badge': '欢快相声', 'mark': '岳孙',
+        'colors': ('#4f2e18', '#26160b', '#ffc28f'),
+        'queries': ['岳云鹏 孙越 相声'], 'min_dur': 240, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('岳云鹏', '岳云鹏相声', '孙越'),
+    },
+    {
+        'id': 'ct_master', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '马三立侯宝林', 'sub': '津京相声泰斗传世名段', 'badge': '大师相声', 'mark': '泰斗',
+        'colors': ('#3d3322', '#1f1a11', '#ebd2a4'),
+        'queries': ['马三立 相声', '侯宝林 相声'], 'min_dur': 180, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('马三立', '马三立相声', '侯宝林', '侯宝林相声', '大师相声'),
+    },
+    {
+        'id': 'ct_liubaorui', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '刘宝瑞单口', 'sub': '君臣斗珍珠翡翠白玉汤', 'badge': '单口大王', 'mark': '单口',
+        'colors': ('#2e3a4f', '#171d29', '#a8c6ff'),
+        'queries': ['刘宝瑞 相声', '刘宝瑞 单口', '传统单口相声'], 'min_dur': 220, 'sort_ep': False, 'require_zh': True,
+        'aliases': ('刘宝瑞', '单口相声', '刘宝瑞单口相声'),
+    },
+    {
+        'id': 'ct_shantianfang', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '单田芳评书', 'sub': '风尘三侠白眉大侠连播', 'badge': '名家评书', 'mark': '单老',
+        'colors': ('#4d2424', '#261212', '#ffadad'),
+        'queries': ['单田芳 评书', '单田芳 白眉大侠', '单田芳 隋唐演义'], 'min_dur': 450, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('单田芳', '单田芳评书', '白眉大侠', '隋唐演义评书'),
+    },
+    {
+        'id': 'ct_sanguo', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '三国演义评书', 'sub': '长篇三国演义按回连播', 'badge': '长篇评书', 'mark': '三国',
+        'colors': ('#1e3b47', '#0f1d24', '#8ce0ff'),
+        'queries': ['三国演义 DJ长音频', '袁阔成 三国演义'],
+        'must_kw': ('三国',),
+        'exclude_kw': ('老郭', '郭德纲', '插曲', '片尾', '主题曲', '电视剧原声'),
+        'min_dur': 450, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('三国演义评书', '袁阔成', '袁阔成三国演义', '讲三国'),
+    },
+    {
+        'id': 'ct_shuihu', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '水浒传评书', 'sub': '武松打虎梁山好汉传奇', 'badge': '长篇评书', 'mark': '水浒',
+        'colors': ('#294022', '#142111', '#a8eb96'),
+        'queries': ['评书 武松', '田连元 水浒传', '单田芳 水浒传'],
+        'must_kw': ('水浒', '武松', '宋江', '梁山', '鲁智深', '林冲'),
+        'exclude_kw': ('好汉歌', '主题曲', '插曲'),
+        'min_dur': 450, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('水浒传评书', '田连元', '田连元水浒传', '武松评书'),
+    },
+    {
+        'id': 'ct_pingshu_mix', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '刘兰芳岳飞传', 'sub': '精忠报国岳飞传全回连播', 'badge': '经典评书', 'mark': '岳飞',
+        'colors': ('#472c3e', '#24161f', '#f5addb'),
+        'album_mids': ['00194k7N4EJrFc'], 'queries': ['刘兰芳 岳飞传'], 'min_dur': 400, 'sort_ep': True,
+        'aliases': ('刘兰芳', '岳飞传', '刘兰芳评书', '刘兰芳岳飞传', '评书电台'),
+    },
+    {
+        'id': 'ct_yangjia', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '杨家将呼家将', 'sub': '传统忠烈袍带评书连播', 'badge': '传统评书', 'mark': '杨家',
+        'colors': ('#4d2d1e', '#26160f', '#ffbe9e'),
+        'queries': ['呼家将 DJ长音频', '杨家将 评书 刘兰芳', '薛家将 评书'],
+        'must_kw': ('呼家将', '杨家将', '薛家将'),
+        'exclude_kw': ('凤凰花开', '这就是爱', '超级英雄', '无畏的模样'),
+        'min_dur': 450, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('杨家将', '杨家将评书', '呼家将', '薛家将'),
+    },
+    {
+        'id': 'ct_baogong', 'cat': 'crosstalk', 'kind': 'channel',
+        'title': '三侠五义包公', 'sub': '包公断案七侠五义评书', 'badge': '公案评书', 'mark': '包公',
+        'colors': ('#263452', '#131a29', '#a3c2ff'),
+        'queries': ['三侠五义 评书', '包公案 评书', '七侠五义 评书'],
+        'min_dur': 450, 'sort_ep': True, 'require_zh': True,
+        'aliases': ('三侠五义', '包公案', '七侠五义', '包公评书'),
+    },
+]
+
+for _st in RADIO_STATIONS:
+    _c1, _c2, _acc = _st['colors']
+    _st['cover'] = _radio_emblem_uri(_c1, _c2, _acc, _st['badge'], _st['mark'])
+
+RADIO_BY_ID = {s['id']: s for s in RADIO_STATIONS}
+RADIO_PROG_PATH = None
+_RADIO_PROG_LOCK = threading.Lock()
+
+
+def _get_radio_prog_path() -> Path:
+    return RADIO_PROG_PATH if RADIO_PROG_PATH is not None else (SESSION_PATH.parent / 'radio_progress.json')
+_RADIO_CH_CACHE = {}
+_RADIO_CH_LOCK = threading.Lock()
+_PREWARMED_LIVE = False
+_PREWARM_LOCK = threading.Lock()
+
+_RADIO_SKIP_POP_TITLES = {
+    '勇气大爆发', '数鸭子', '女儿国', '女儿情', '海林故事', '滚滚长江东逝水',
+    '历史的天空', '片头曲', '趁着夜色上路', 'Six In A Bed', '秦韵唐诗故乡情',
+    '好汉歌', '这一拜', '子夜四时歌', '全部免费', '发刊词', '隆重上架',
+}
+
+
+def _clean_radio_ep_title(raw_title: str) -> str:
+    s = str(raw_title or '').strip()
+    if not s:
+        return ''
+    # Remove DJ/upload tags & file extensions
+    s = re.sub(r'[\(\[（【]\s*(?:DJ长音频|DJ版|有声读物|有声小说|长音频|完整版)\s*[\)\]）】]', '', s, flags=re.I)
+    s = re.sub(r'\.(?:1?mp3|m4a|wav|flac)\b', '', s, flags=re.I)
+    # Strip leading promo bracket like 【6岁+学成语】 or 【成长故事】 when main title follows
+    m_lead = re.match(r'^【[^】]{1,14}】\s*(.+)$', s)
+    if m_lead and len(m_lead.group(1).strip()) >= 2:
+        s = m_lead.group(1).strip()
+    # Strip trailing promo bracket (closed or truncated unclosed 【宝宝巴士...)
+    s = re.sub(r'\s*【(?:宝宝巴士|免费|点击|关注|订阅|更多)[^】]*】?$', '', s)
+    # Replace underscore separators with single spaces
+    s = re.sub(r'_+', ' ', s)
+    s = re.sub(r'\s{2,}', ' ', s).strip(' -—·|_')
+    return s or str(raw_title).strip()
+
+
+def _norm_ep_dedup_key(title: str) -> str:
+    s = _clean_radio_ep_title(title).lower()
+    s = re.sub(r'[\s:：·\-—_.,，。！？!?\(\)（）\[\]【】《》"\']+', '', s)
+    return s
+
+
+def _extract_ep_num(title: str):
+    # 1. Graded stage-book pattern like "牛津树1-25" or "A-01" -> 1*1000 + 25
+    mg = re.search(r'(?:牛津树|level|book|stage)?\s*(\d{1,2})\s*[-—]\s*0*(\d{1,3})\b', title, re.I)
+    if mg:
+        return int(mg.group(1)) * 1000 + int(mg.group(2))
+    # 2. Explicit Chinese chapter/episode marker
+    m = re.search(r'第\s*0*(\d{1,4})\s*[集回章课讲篇部节]', title)
+    if m:
+        return int(m.group(1))
+    m_cn = re.search(r'第([一二三四五六七八九十百零两]{1,5})[集回章课讲篇部节]', title)
+    if m_cn:
+        cn_map = {'零': 0, '一': 1, '二': 2, '两': 2, '三': 3, '四': 4, '五': 5, '六': 6, '七': 7, '八': 8, '九': 9}
+        val, cur = 0, 0
+        for ch in m_cn.group(1):
+            if ch == '百':
+                val += (cur or 1) * 100
+                cur = 0
+            elif ch == '十':
+                val += (cur or 1) * 10
+                cur = 0
+            elif ch in cn_map:
+                cur = cn_map[ch]
+        val += cur
+        if val > 0:
+            return val
+    # 3. Leading 2-4 digit episode index (e.g. "001珍珠翡翠白玉汤", "三国演义0002", "我是小学生02")
+    m2 = re.match(r'^\s*(?:[\[\(【（][^\]\)】）]{1,12}[\]\)】）]\s*)?0*(\d{1,4})(?:[\s._\-—:：集回]|[\u4e00-\u9fff])', title)
+    if m2:
+        return int(m2.group(1))
+    m3 = re.search(r'(?:lesson|ep|episode|part|vol\.?|book|chapter|story)\s*0*(\d{1,4})\b', title, re.I)
+    if m3:
+        return int(m3.group(1))
+    m4 = re.search(r'0*(\d{2,4})(?:\s*$|\s*[\(\[（])', title)
+    if m4:
+        return int(m4.group(1))
+    return None
+
+
+def _prewarm_live_radio_hosts():
+    global _PREWARMED_LIVE
+    with _PREWARM_LOCK:
+        if _PREWARMED_LIVE:
+            return
+        _PREWARMED_LIVE = True
+
+    def _bg():
+        seen_hosts = set()
+        for s in RADIO_STATIONS:
+            if s.get('kind') != 'live':
+                continue
+            u = s.get('url') or ''
+            h = urllib.parse.urlsplit(u).hostname or ''
+            if u.endswith('.m3u8') and h not in seen_hosts:
+                seen_hosts.add(h)
+                try:
+                    _resolve_safe_ffmpeg_url(u, {}, is_live=True)
+                except Exception:
+                    pass
+
+    threading.Thread(target=_bg, daemon=True).start()
+
+
+def qq_album_tracks(albummid: str, limit: int = 60) -> list:
+    if not albummid:
+        return []
+    payload = {
+        'comm': _qq_comm(),
+        'req_0': {
+            'module': 'music.musichallAlbum.AlbumSongList',
+            'method': 'GetAlbumSongList',
+            'param': {'albumMid': str(albummid), 'begin': 0, 'num': int(limit), 'order': 2},
+        },
+    }
+    try:
+        req = urllib.request.Request(
+            'https://u.y.qq.com/cgi-bin/musicu.fcg',
+            data=json.dumps(payload).encode('utf-8'),
+            headers=_qq_headers(),
+        )
+        with _safe_urlopen(req, timeout=6) as r:
+            d = json.loads(_read_http_bytes(r).decode('utf-8', errors='replace'))
+        raw = d.get('req_0', {}).get('data', {}).get('songList') or []
+        default_q = _default_quality_label()
+        return [_format_qq_song(x.get('songInfo') or x, default_q=default_q) for x in raw if isinstance(x, dict)]
+    except Exception as e:
+        log.warning('qq_album_tracks(%r) failed: %s', albummid, e)
+        return []
+
+
+RADIO_AUDIO_MODES = {
+    'hifi': '臻享增强',
+    'voice': '清澈人声',
+    'raw': '原声直通',
+}
+
+
+def _get_radio_audio_mode(cfg: dict = None) -> str:
+    m = (cfg if isinstance(cfg, dict) else load_config()).get('radio_audio_mode', 'hifi')
+    return m if m in RADIO_AUDIO_MODES else 'hifi'
+
+
+def _build_audio_filter(track: dict, radio_audio_mode: str = None) -> str:
+    base_soxr = f'aresample={OUT_RATE}:resampler=soxr:precision=28'
+    if not isinstance(track, dict) or not track.get('radio_id'):
+        return base_soxr
+    mode = radio_audio_mode if radio_audio_mode in RADIO_AUDIO_MODES else _get_radio_audio_mode()
+    if mode == 'raw':
+        return base_soxr
+    if mode == 'voice':
+        return (
+            'highpass=f=85,'
+            'equalizer=f=2900:t=q:w=1.0:g=3.0,'
+            'treble=g=1.6:f=7500,'
+            'acompressor=threshold=-19dB:ratio=2.4:attack=10:release=180:makeup=2.4dB,'
+            f'{base_soxr},'
+            'alimiter=limit=0.95:attack=3:release=50:level=disabled'
+        )
+    if track.get('is_live'):
+        return (
+            'highpass=f=52,'
+            'equalizer=f=115:t=q:w=1.0:g=2.4,'
+            'equalizer=f=3400:t=q:w=1.2:g=1.8,'
+            'treble=g=2.2:f=8500,'
+            'acompressor=threshold=-19dB:ratio=2.0:attack=15:release=220:makeup=2.0dB,'
+            f'{base_soxr},'
+            'alimiter=limit=0.95:attack=3:release=50:level=disabled'
+        )
+    return (
+        'highpass=f=65,'
+        'equalizer=f=155:t=q:w=1.1:g=1.8,'
+        'equalizer=f=3100:t=q:w=1.1:g=2.5,'
+        'treble=g=1.5:f=8000,'
+        'acompressor=threshold=-20dB:ratio=2.2:attack=12:release=200:makeup=2.2dB,'
+        f'{base_soxr},'
+        'alimiter=limit=0.95:attack=3:release=50:level=disabled'
+    )
+
+
+def _radio_live_quality_label(url: str) -> str:
+    h = urllib.parse.urlsplit(url or '').hostname or ''
+    if any(k in h for k in ('cnr.cn', 'rbc.cn', 'cri.cn', 'macaofm995')):
+        return '48kHz AAC 高清'
+    return 'AAC 立体声高清'
+
+
+def _radio_live_track(st: dict) -> dict:
+    return {
+        'mid': '',
+        'media_mid': '',
+        'radio_id': st['id'],
+        'is_live': True,
+        'is_local': False,
+        'title': st['title'],
+        'artist': st['badge'],
+        'album': '网络广播电台',
+        'desc': st['sub'],
+        'cover': st['cover'],
+        'thumb': st['cover'],
+        'duration': 0,
+        'vip': False,
+        'source': '网络电台',
+        'quality': _radio_live_quality_label(st['url']),
+        'url': st['url'],
+        'headers': {},
+    }
+
+
+def resolve_radio_channel_tracks(st: dict, shuffle: bool = False, force_refresh: bool = False) -> list:
+    sid = st['id']
+    now_m = time.monotonic()
+    with _RADIO_CH_LOCK:
+        cached = _RADIO_CH_CACHE.get(sid)
+    if cached and (now_m - cached[0]) < 1800.0 and cached[1] and not shuffle and not force_refresh:
+        return [dict(x) for x in cached[1]]
+
+    min_dur = int(st.get('min_dur') or 60)
+    must_kw = tuple(st.get('must_kw') or ())
+    exclude_kw = tuple(st.get('exclude_kw') or ())
+    require_zh = bool(st.get('require_zh'))
+    raw_tracks = []
+
+    # 1. Curated ordered QQ Music albumMids first (single-book sequential chapters!)
+    for amid in (st.get('album_mids') or ()):
+        got_alb = qq_album_tracks(amid, limit=60)
+        if got_alb:
+            raw_tracks.extend(got_alb)
+
+    # 2. Supplement or fallback via keyword search (parallelized on live queries for ~4x faster cold-start)
+    if len(raw_tracks) < 20:
+        queries = list(st.get('queries') or [st['title']])
+        search_tasks = [(qi, pg, q) for qi, q in enumerate(queries[:4]) for pg in (1, 2)]
+        if hasattr(qq_search, 'assert_called') or len(search_tasks) <= 1:
+            for _, pg, q in search_tasks:
+                try:
+                    got = qq_search(q, limit=30, page=pg)
+                    if got:
+                        raw_tracks.extend(got)
+                except Exception as e:
+                    log.warning('radio channel search %r p%d failed: %s', q, pg, e)
+                if len(raw_tracks) >= 100:
+                    break
+        else:
+            def _fetch_search_page(task):
+                qi, pg, q = task
+                try:
+                    return (qi, pg, qq_search(q, limit=30, page=pg) or [])
+                except Exception as e:
+                    log.warning('radio channel search %r p%d failed: %s', q, pg, e)
+                    return (qi, pg, [])
+
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(4, len(search_tasks))) as ex:
+                for _, _, got in sorted(ex.map(_fetch_search_page, search_tasks), key=lambda r: (r[0], r[1])):
+                    if got:
+                        raw_tracks.extend(got)
+                    if len(raw_tracks) >= 120:
+                        break
+
+    filtered = []
+    seen_mids = set()
+    seen_stems = set()
+    for t in raw_tracks:
+        if not isinstance(t, dict):
+            continue
+        raw_t = str(t.get('title') or '').strip()
+        if not raw_t or any(bad in raw_t for bad in _RADIO_SKIP_POP_TITLES):
+            continue
+        if exclude_kw and any(ek.lower() in raw_t.lower() for ek in exclude_kw):
+            continue
+        if must_kw and not any(mk.lower() in (raw_t + ' ' + str(t.get('album') or '')).lower() for mk in must_kw):
+            continue
+        if require_zh and not re.search(r'[\u4e00-\u9fff]', raw_t):
+            continue
+        # Block Hangul / German audiobook noise
+        if re.search(r'[\uac00-\ud7af]', raw_t) or re.search(r'\b(?:Kapitel|Teil|Studie)\b', raw_t):
+            continue
+        dur = int(t.get('duration') or 0)
+        if dur > 0 and dur < min_dur:
+            continue
+        clean_t = _clean_radio_ep_title(raw_t)
+        if not clean_t:
+            continue
+        mid = t.get('mid') or ''
+        stem = _norm_ep_dedup_key(clean_t)
+        if (mid and mid in seen_mids) or (stem and stem in seen_stems):
+            continue
+        if mid:
+            seen_mids.add(mid)
+        if stem:
+            seen_stems.add(stem)
+        item = dict(t)
+        item['title'] = clean_t
+        item['radio_id'] = sid
+        item['is_live'] = False
+        item['source'] = st['badge']
+        if not item.get('cover'):
+            item['cover'] = st['cover']
+            item['thumb'] = st['cover']
+        filtered.append(item)
+
+    # 3. Verify stream playability via batched vkey check (skipping when qq_search is unit-test mocked or urls preset)
+    if filtered and not hasattr(qq_search, 'assert_called') and not all(x.get('url') for x in filtered):
+        v_ok = _qq_playable_tracks(filtered[:90])
+        if len(v_ok) >= 3:
+            filtered = v_ok
+
+    if st.get('sort_ep') and len(filtered) > 2 and not st.get('album_mids'):
+        numbered = [(i, _extract_ep_num(x.get('title', '')), x) for i, x in enumerate(filtered)]
+        if sum(1 for _, n, _ in numbered if n is not None) >= max(2, len(filtered) // 3):
+            numbered.sort(key=lambda tup: (0 if tup[1] is not None else 1, tup[1] if tup[1] is not None else 999999, tup[0]))
+            filtered = [tup[2] for tup in numbered]
+    elif st.get('sort_ep') and st.get('album_mids') and len(filtered) > 2:
+        # Sort graded books like Oxford Reading Tree (3-10 -> 1-01) when episode numbers exist
+        numbered = [(i, _extract_ep_num(x.get('title', '')), x) for i, x in enumerate(filtered)]
+        if sum(1 for _, n, _ in numbered if n is not None) >= (len(filtered) // 2):
+            numbered.sort(key=lambda tup: (0 if tup[1] is not None else 1, tup[1] if tup[1] is not None else 999999, tup[0]))
+            filtered = [tup[2] for tup in numbered]
+
+    if filtered:
+        with _RADIO_CH_LOCK:
+            _RADIO_CH_CACHE[sid] = (now_m, [dict(x) for x in filtered[:60]])
+
+    out = [dict(x) for x in filtered[:60]]
+    if shuffle and len(out) > 1:
+        random.shuffle(out)
+    return out
+
+
+def match_radio_voice_query(raw_q: str, clean_q: str):
+    """Match natural voice commands for FM radio, local/HK/MO radio, kids/English stories, crosstalk, and pingshu."""
+    s_all = (raw_q or '').lower().strip()
+    s_cln = (clean_q or '').lower().strip(' ，。！？,.!?《》"\'“”')
+    for pre in (
+        '请帮我', '帮我', '继续播放', '继续听', '接着听', '接着放', '给孩子', '给宝宝', '给我们', '我想听', '想听',
+        '来一段', '来段', '说一段', '说段', '讲一段', '讲个', '讲一首', '放一段', '放段', '听一段', '听段', '听一听',
+        '播放', '打开', '开启', '放个', '来个', '放', '听',
+    ):
+        if s_cln.startswith(pre) and len(s_cln) > len(pre):
+            s_cln = s_cln[len(pre):].strip()
+    if not s_cln:
+        return None
+    for suf in ('广播电台', '电台', '广播', '频道', '调频'):
+        if s_cln.endswith(suf) and len(s_cln) > len(suf):
+            cand = s_cln[:-len(suf)].strip()
+            for st in RADIO_STATIONS:
+                if cand == st['title'].lower() or any(cand == a.lower() for a in st.get('aliases', ())):
+                    return st['id']
+    for st in RADIO_STATIONS:
+        if s_cln == st['title'].lower() or any(s_cln == a.lower() for a in st.get('aliases', ())):
+            return st['id']
+    for st in RADIO_STATIONS:
+        for a in (st['title'], *st.get('aliases', ())):
+            al = a.lower()
+            if len(al) >= 3 and (al in s_cln or al in s_all):
+                return st['id']
+    if s_cln in ('收音机', '广播', '电台', '网络收音机', '网络电台', '新闻电台', '新闻', '放广播', '听广播', '打开电台', '打开收音机'):
+        return 'cnr_zgzs'
+    if s_cln in ('音乐电台', '音乐台', '高音质电台', '高音质音乐电台', '高清音乐电台', '流行音乐电台', '华语音乐台', '音乐调频'):
+        return 'cnr_yyzs'
+    if s_cln in ('轻音乐', '纯音乐', '爵士', '爵士乐', '爵士音乐', '钢琴曲', '古典轻音乐'):
+        return 'qt_jazz'
+    if s_cln in ('粤语电台', '粤语歌电台', '港乐电台', '港乐台', '粤语音乐台'):
+        return 'asia_yue'
+    if s_cln in ('古典音乐', '交响乐', '古典电台'):
+        return 'cnr_dszs'
+    if s_cln in ('老歌电台', '经典老歌', '怀旧老歌', '怀旧电台'):
+        return 'xm_2629'
+    if s_cln in ('儿童故事', '故事', '少儿故事', '讲个故事', '讲故事', '给孩子讲故事', '儿童电台', '故事电台'):
+        return 'kids_kaishu'
+    if s_cln in ('英语', '磨耳朵', '少儿英语', '英语故事'):
+        return 'kids_oxford'
+    if s_cln in ('相声', '听相声', '说段相声', '来段相声', '相声电台'):
+        return 'ct_guodegang'
+    if s_cln in ('评书', '听评书', '来段评书', '评书电台', '听书'):
+        return 'ct_shantianfang'
+    return None
+
+
 class QQMusicEngine:
     """Standalone 48kHz Stereo Player with Progress Tracking, Lyrics, and Voice Ducking."""
     ambient_preset = None
@@ -2246,6 +3223,10 @@ class QQMusicEngine:
         init_mode = load_config().get('play_mode', 'loop')
         self.play_mode = init_mode if init_mode in ('loop', 'single', 'shuffle') else 'loop'
         self._read_initial_volume()
+        self._radio_prog = {}
+        self._radio_prog_dirty = False
+        self._radio_prog_saved_mono = 0.0
+        self._load_radio_progress()
         self._load_session()
 
     def _clear_duck_locked(self):
@@ -2298,7 +3279,107 @@ class QQMusicEngine:
             'duration': dur,
             'vip': bool(t.get('vip')),
             'is_local': bool(t.get('is_local')),
+            'is_live': bool(t.get('is_live')),
+            'radio_id': str(t.get('radio_id') or ''),
+            'desc': str(t.get('desc') or ''),
         }
+
+    def _load_radio_progress(self):
+        try:
+            p = _get_radio_prog_path()
+            if not p.exists() or p.is_symlink():
+                return
+            raw = json.loads(_read_regular_text(p, 262144, private=True))
+            if isinstance(raw, dict):
+                clean = {}
+                for k, v in list(raw.items())[:80]:
+                    if isinstance(k, str) and k in RADIO_BY_ID and isinstance(v, dict):
+                        clean[k] = {
+                            'mid': str(v.get('mid') or '')[:64],
+                            'title': str(v.get('title') or '')[:120],
+                            'idx': max(0, int(v.get('idx') or 0)),
+                            'sec': max(0.0, round(float(v.get('sec') or 0.0), 1)),
+                            'dur': max(0, int(v.get('dur') or 0)),
+                            'updated': int(v.get('updated') or 0),
+                        }
+                self._radio_prog = clean
+        except Exception as e:
+            log.warning('Failed to load radio progress: %s', e)
+
+    def _snapshot_radio_progress_locked(self) -> bool:
+        if not (self.playing and 0 <= self.index < len(self.queue)):
+            return False
+        cur = self.queue[self.index]
+        rid = str(cur.get('radio_id') or '')
+        if not rid or cur.get('is_live') or rid not in RADIO_BY_ID:
+            return False
+        dur = self._safe_dur(cur.get('duration'))
+        sec = max(0.0, float(self.elapsed_base or 0.0))
+        idx = self.index
+        target = cur
+        if dur > 30 and sec >= (dur - 8) and len(self.queue) > 1:
+            idx = (self.index + 1) % len(self.queue)
+            target = self.queue[idx]
+            dur = self._safe_dur(target.get('duration'))
+            sec = 0.0
+        entry = {
+            'mid': str(target.get('mid') or '')[:64],
+            'title': str(target.get('title') or '')[:120],
+            'idx': idx,
+            'sec': round(sec, 1),
+            'dur': dur,
+            'updated': int(time.time()),
+        }
+        prev = self._radio_prog.get(rid)
+        if prev != entry:
+            self._radio_prog[rid] = entry
+            self._radio_prog_dirty = True
+            return True
+        return False
+
+    def _flush_radio_progress(self, force: bool = False):
+        with self._lock:
+            if not self._radio_prog_dirty and not force:
+                return
+            snap = dict(self._radio_prog)
+            self._radio_prog_dirty = False
+            self._radio_prog_saved_mono = time.monotonic()
+        p = _get_radio_prog_path()
+        with _RADIO_PROG_LOCK:
+            tmp = p.parent / f'.{p.name}.{os.getpid()}.{threading.get_ident()}.tmp'
+            created = False
+            try:
+                p.parent.mkdir(parents=True, mode=0o700, exist_ok=True)
+                pst = os.lstat(p.parent)
+                if p.is_symlink():
+                    raise OSError('Refusing symlink radio progress path')
+                fd = os.open(tmp, os.O_WRONLY | os.O_CREAT | os.O_TRUNC | getattr(os, 'O_NOFOLLOW', 0), 0o600)
+                created = True
+                with os.fdopen(fd, 'w', encoding='utf-8') as tf:
+                    os.fchmod(tf.fileno(), 0o600)
+                    if os.geteuid() == 0 and pst.st_uid != 0:
+                        with contextlib.suppress(OSError):
+                            os.fchown(tf.fileno(), pst.st_uid, pst.st_gid)
+                    tf.write(json.dumps(snap, ensure_ascii=False))
+                os.replace(tmp, p)
+            except Exception as e:
+                log.warning('Failed to save radio progress: %s', e)
+            finally:
+                if created:
+                    with contextlib.suppress(OSError):
+                        tmp.unlink(missing_ok=True)
+
+    def clear_radio_progress(self, station_id: str) -> dict:
+        sid = str(station_id or '').strip()
+        if not sid or sid not in RADIO_BY_ID:
+            return {'ok': False, 'error': '未找到该频道'}
+        with self._lock:
+            removed = self._radio_prog.pop(sid, None) is not None
+            if removed:
+                self._radio_prog_dirty = True
+        if removed:
+            self._flush_radio_progress(force=True)
+        return {'ok': True, 'id': sid, 'cleared': removed}
 
     def _load_session(self):
         try:
@@ -2314,7 +3395,14 @@ class QQMusicEngine:
                     if not isinstance(x, dict):
                         continue
                     d = dict(x)
-                    if not d.get('is_local'):
+                    if d.get('is_live'):
+                        rid = str(d.get('radio_id') or '')
+                        st_r = RADIO_BY_ID.get(rid)
+                        d['url'] = st_r['url'] if st_r and st_r.get('kind') == 'live' else None
+                        if not d['url']:
+                            continue
+                        d['quality'] = _radio_live_quality_label(d['url'])
+                    elif not d.get('is_local'):
                         d['url'] = None
                     cleaned_q.append(d)
                 self.queue = cleaned_q
@@ -2325,6 +3413,8 @@ class QQMusicEngine:
                     except (TypeError, ValueError, OverflowError):
                         idx_val = 0
                     self.index = max(0, min(idx_val, len(self.queue) - 1))
+                    if self.queue[self.index].get('radio_id') and self.play_mode in ('shuffle', 'single'):
+                        self.play_mode = 'loop'
                     raw_eb = data.get('elapsed_base')
                     try:
                         eb_val = 0.0 if isinstance(raw_eb, bool) or raw_eb is None else float(raw_eb)
@@ -2346,9 +3436,12 @@ class QQMusicEngine:
 
     def _save_session_locked(self):
         try:
+            flush_rp = False
             with self._lock:
                 if getattr(self, '_shutting_down', False):
                     return
+                if self._snapshot_radio_progress_locked() or self._radio_prog_dirty:
+                    flush_rp = True
                 playing = bool(self.playing and self.queue)
                 data = {
                     'playing': playing,
@@ -2370,6 +3463,9 @@ class QQMusicEngine:
                             'quality': x.get('quality', ''),
                             'url': x.get('url') if x.get('is_local') else None,
                             'is_local': bool(x.get('is_local')),
+                            'is_live': bool(x.get('is_live')),
+                            'radio_id': x.get('radio_id', ''),
+                            'desc': x.get('desc', ''),
                         }
                         for x in (self.queue[:200] if playing else [])
                     ],
@@ -2401,6 +3497,8 @@ class QQMusicEngine:
                         tmp.unlink(missing_ok=True)
                     except OSError:
                         pass
+            if flush_rp:
+                self._flush_radio_progress()
         except Exception as e:
             log.warning('Failed to save session: %s', e)
 
@@ -2619,8 +3717,11 @@ class QQMusicEngine:
             return {'ok': True, 'sleep': None, 'message': '已取消定时关闭' if had else '没有设置定时关闭'}
         with self._lock:
             m, n = _int(minutes, 1, 240), _int(tracks, 1, 50)
-            if secs is None and m is None and n is not None and getattr(self, 'ambient_preset', None):
-                m = max(10, min(240, n * 15))
+            q_list = getattr(self, 'queue', ())
+            q_idx = getattr(self, 'index', -1)
+            cur_live = bool(getattr(self, 'playing', False) and 0 <= q_idx < len(q_list) and isinstance(q_list[q_idx], dict) and q_list[q_idx].get('is_live'))
+            if secs is None and m is None and n is not None and (getattr(self, 'ambient_preset', None) or cur_live):
+                m = max(15 if cur_live else 10, min(240, n * 15))
                 n = None
             if secs is None and m is not None:
                 secs = m * 60.0
@@ -3655,6 +4756,13 @@ class QQMusicEngine:
 
     def sleep_housekeeping(self):
         """Every 2 s: bring the day volume back when it is due; end a session whose sound was stopped another way."""
+        do_rp_flush = False
+        with self._lock:
+            if self.playing and not self.paused and (time.monotonic() - self._radio_prog_saved_mono) >= 20.0:
+                if self._snapshot_radio_progress_locked():
+                    do_rp_flush = True
+        if do_rp_flush:
+            self._flush_radio_progress()
         if getattr(self, 'alarm_ringing', False) and getattr(self, 'sleep_session', None) is not None:
             self.on_alarm_ringing()
         r = self._sleep_state.get('restore')
@@ -3727,6 +4835,7 @@ class QQMusicEngine:
                     'boot_id': self.boot_id,
                     'open_ui_seq': self.open_ui_seq,
                     'open_ui_fresh': ui_fresh,
+                    'open_ui_tab': (getattr(self, '_open_ui_tab', '') if ui_fresh else ''),
                     'elapsed': elapsed,
                     'duration': dur,
                     'volume': getattr(self, 'volume', 55),
@@ -3742,6 +4851,9 @@ class QQMusicEngine:
                         'title': t.get('title', ''),
                         'artist': t.get('artist', ''),
                         'cover': t.get('thumb') or t.get('cover', ''),
+                        'is_live': bool(t.get('is_live')),
+                        'radio_id': t.get('radio_id', ''),
+                        'desc': t.get('desc', ''),
                     } if t else None,
                 }
             ducked = self.ducked
@@ -3772,6 +4884,9 @@ class QQMusicEngine:
                             'quality': x.get('quality', ''),
                             'url': x.get('url') if x.get('is_local') else None,
                             'is_local': bool(x.get('is_local')),
+                            'is_live': bool(x.get('is_live')),
+                            'radio_id': x.get('radio_id', ''),
+                            'desc': x.get('desc', ''),
                         }
                         for x in self.queue[:200]
                     ]
@@ -3789,6 +4904,7 @@ class QQMusicEngine:
             'boot_id': self.boot_id,
             'open_ui_seq': self.open_ui_seq,
             'open_ui_fresh': ui_fresh,
+            'open_ui_tab': (getattr(self, '_open_ui_tab', '') if ui_fresh else ''),
             'queue_seq': q_seq,
             'lyrics_seq': l_seq,
             'volume': volume,
@@ -3802,8 +4918,15 @@ class QQMusicEngine:
                 'album': t.get('album', ''),
                 'cover': t.get('cover', ''),
                 'source': t.get('source', 'QQ音乐'),
-                'quality': t.get('quality', ''),
+                'quality': (
+                    (f"{t.get('quality') or 'AAC 高清'} · {RADIO_AUDIO_MODES[_get_radio_audio_mode(cfg)]}"
+                     if _get_radio_audio_mode(cfg) != 'raw' else (t.get('quality') or 'AAC 高清'))
+                    if t.get('radio_id') else t.get('quality', '')
+                ),
                 'duration': dur,
+                'is_live': bool(t.get('is_live')),
+                'radio_id': t.get('radio_id', ''),
+                'desc': t.get('desc', ''),
             } if t else None,
             'index': index,
             'queue_len': queue_len,
@@ -3814,6 +4937,7 @@ class QQMusicEngine:
             'sleep_preview': prev_pub,
             'user_profile': cfg.get('user_profile'),
             'quality_level': cfg.get('quality_level', 'lossless'),
+            'radio_audio_mode': _get_radio_audio_mode(cfg),
             'max_cache_mb': cfg.get('max_cache_mb', 200),
         }
         if lyrics_snap is not None:
@@ -3822,7 +4946,174 @@ class QQMusicEngine:
             resp['queue'] = queue_snap
         return resp
 
-    def play_tracks(self, tracks: list, start_index: int = 0, open_ui: bool = False):
+    def radio_catalog_public(self) -> dict:
+        _prewarm_live_radio_hosts()
+        cfg = load_config()
+        favs_raw = cfg.get('radio_favs')
+        favs = [str(x) for x in favs_raw if isinstance(x, str) and x in RADIO_BY_ID] if isinstance(favs_raw, list) else []
+        fav_set = set(favs)
+        with self._lock:
+            self._snapshot_radio_progress_locked()
+            prog_snap = {k: dict(v) for k, v in self._radio_prog.items()}
+            cur_t = self.queue[self.index] if (self.playing and 0 <= self.index < len(self.queue)) else None
+            active_id = str(cur_t.get('radio_id') or '') if cur_t else ''
+            is_playing = bool(self.playing and not self.paused and not getattr(self, 'ambient_preset', None))
+        stations_pub = [
+            {
+                'id': s['id'],
+                'cat': s['cat'],
+                'kind': s['kind'],
+                'title': s['title'],
+                'sub': s['sub'],
+                'badge': s['badge'],
+                'mark': s['mark'],
+                'cover': s['cover'],
+                'fav': s['id'] in fav_set,
+                'resume': prog_snap.get(s['id']) if s['kind'] == 'channel' else None,
+            }
+            for s in RADIO_STATIONS
+        ]
+        return {
+            'ok': True,
+            'categories': RADIO_CATEGORIES,
+            'stations': stations_pub,
+            'favs': favs,
+            'active_radio_id': active_id,
+            'playing': is_playing,
+            'radio_audio_mode': _get_radio_audio_mode(cfg),
+        }
+
+    def set_radio_audio_mode(self, mode: str) -> dict:
+        m = str(mode or '').strip().lower()
+        if m not in RADIO_AUDIO_MODES:
+            return {'ok': False, 'error': '不支持的电台音质模式'}
+        with _CFG_LOCK:
+            cfg = load_config()
+            prev_m = _get_radio_audio_mode(cfg)
+            cfg['radio_audio_mode'] = m
+            save_config(cfg)
+        restarted_live = False
+        if m != prev_m:
+            with self._lock:
+                cur_t = self.queue[self.index] if (self.playing and not self.paused and 0 <= self.index < len(self.queue)) else None
+                if cur_t and cur_t.get('radio_id') and not getattr(self, 'ambient_preset', None):
+                    cur_seek = 0.0 if cur_t.get('is_live') else max(0.0, float(self.elapsed_base or 0.0))
+                    gen = self._gen
+                    restarted_live = True
+            if restarted_live:
+                threading.Thread(target=self._start_current_track, args=(cur_seek, gen), daemon=True).start()
+        return {
+            'ok': True,
+            'radio_audio_mode': m,
+            'label': RADIO_AUDIO_MODES[m],
+            'message': f"电台音质已切换为：{RADIO_AUDIO_MODES[m]}",
+        }
+
+    def radio_episodes_public(self, station_id: str, refresh: bool = False) -> dict:
+        sid = str(station_id or '').strip()
+        st = RADIO_BY_ID.get(sid)
+        if not st or st.get('kind') != 'channel':
+            return {'ok': False, 'error': '该电台为实时直播，无分集列表'}
+        tracks = resolve_radio_channel_tracks(st, shuffle=False, force_refresh=bool(refresh))
+        with self._lock:
+            self._snapshot_radio_progress_locked()
+            resume = dict(self._radio_prog[sid]) if sid in self._radio_prog else None
+        pub_eps = [self._public_track(t) for t in tracks]
+        return {
+            'ok': True,
+            'station': {'id': st['id'], 'title': st['title'], 'sub': st['sub'], 'badge': st['badge'], 'cover': st['cover']},
+            'episodes': pub_eps,
+            'resume': resume,
+        }
+
+    def toggle_radio_fav(self, station_id: str, on=None) -> dict:
+        sid = str(station_id or '').strip()
+        st = RADIO_BY_ID.get(sid)
+        if not st:
+            return {'ok': False, 'error': '未找到该电台'}
+        cfg = load_config()
+        raw = cfg.get('radio_favs')
+        favs = [str(x) for x in raw if isinstance(x, str) and x in RADIO_BY_ID] if isinstance(raw, list) else []
+        want = (sid not in favs) if on is None else bool(on)
+        if want and sid not in favs:
+            favs.insert(0, sid)
+        elif not want and sid in favs:
+            favs = [x for x in favs if x != sid]
+        cfg['radio_favs'] = favs[:40]
+        save_config(cfg)
+        return {
+            'ok': True,
+            'id': sid,
+            'fav': want,
+            'favs': cfg['radio_favs'],
+            'message': f"已收藏「{st['title']}」" if want else f"已取消收藏「{st['title']}」",
+        }
+
+    def play_radio(self, station_id: str, shuffle: bool = False, open_ui: bool = False,
+                   track_index: int = None, restart: bool = False) -> dict:
+        sid = str(station_id or '').strip()
+        st = RADIO_BY_ID.get(sid)
+        if not st:
+            return {'ok': False, 'error': '未找到该电台频道'}
+        if st['kind'] == 'live':
+            live_list = [s for s in RADIO_STATIONS if s['kind'] == 'live']
+            tracks = [_radio_live_track(s) for s in live_list]
+            idx = next((i for i, s in enumerate(live_list) if s['id'] == sid), 0)
+            res = self.play_tracks(tracks, idx, open_ui=open_ui, force_loop=True)
+            if res.get('ok'):
+                res['radio'] = {'id': sid, 'kind': 'live', 'title': st['title'], 'badge': st['badge']}
+                res['message'] = f"正在直播：{st['title']}"
+            return res
+
+        tracks = resolve_radio_channel_tracks(st, shuffle=bool(shuffle))
+        if not tracks:
+            return {'ok': False, 'error': f"暂时无法获取「{st['title']}」节目单，请稍后重试"}
+
+        start_idx = 0
+        start_sec = 0.0
+        resumed = False
+        if track_index is not None and not isinstance(track_index, bool):
+            try:
+                start_idx = max(0, min(int(track_index), len(tracks) - 1))
+            except (TypeError, ValueError):
+                start_idx = 0
+        elif not shuffle and not restart:
+            with self._lock:
+                self._snapshot_radio_progress_locked()
+                prog = dict(self._radio_prog[sid]) if sid in self._radio_prog else None
+            if prog:
+                p_mid = prog.get('mid') or ''
+                p_title = prog.get('title') or ''
+                hit_i = next((i for i, x in enumerate(tracks) if (p_mid and x.get('mid') == p_mid) or (p_title and x.get('title') == p_title)), None)
+                if hit_i is None and 0 <= int(prog.get('idx') or 0) < len(tracks):
+                    hit_i = int(prog.get('idx') or 0)
+                if hit_i is not None:
+                    start_idx = hit_i
+                    raw_s = float(prog.get('sec') or 0.0)
+                    ep_d = self._safe_dur(tracks[hit_i].get('duration'))
+                    if raw_s >= 3.0 and (ep_d <= 0 or raw_s < max(3.0, ep_d - 6)):
+                        start_sec = raw_s
+                    resumed = (hit_i > 0 or start_sec >= 3.0)
+
+        res = self.play_tracks(tracks, start_idx, open_ui=open_ui, start_sec=start_sec, force_loop=True)
+        if res.get('ok'):
+            ep_t = tracks[start_idx].get('title', '')
+            mm, ss = divmod(int(round(start_sec)), 60)
+            res['radio'] = {
+                'id': sid, 'kind': 'channel', 'title': st['title'], 'badge': st['badge'],
+                'count': len(tracks), 'index': start_idx, 'sec': round(start_sec, 1), 'resumed': resumed,
+            }
+            if resumed:
+                pos_s = f' {mm:02d}:{ss:02d}' if start_sec >= 3.0 else ''
+                res['message'] = f"续播「{st['title']}」第 {start_idx + 1} 集{pos_s}"
+            elif track_index is not None:
+                res['message'] = f"正在播放第 {start_idx + 1} 集：{ep_t[:16]}"
+            else:
+                res['message'] = f"已开启「{st['title']}」（共 {len(tracks)} 集连播）"
+        return res
+
+    def play_tracks(self, tracks: list, start_index: int = 0, open_ui: bool = False,
+                    start_sec: float = 0.0, force_loop: bool = False):
         tracks = [x for x in tracks if isinstance(x, dict)] if isinstance(tracks, list) else []
         if not tracks:
             return {'ok': False, 'error': '没有可播放的歌曲'}
@@ -3835,20 +5126,33 @@ class QQMusicEngine:
             start = max(0, min(idx - 100, len(tracks) - 200))
             tracks = tracks[start:start + 200]
             idx -= start
+        init_sec = max(0.0, float(start_sec or 0.0)) if not tracks[idx].get('is_live') else 0.0
+        persist_loop = False
         with self._lock:
+            self._snapshot_radio_progress_locked()
             self._clear_duck_except_home_locked()
+            if tracks[idx].get('is_live') and getattr(self, 'sleep_mode', None) == 'tracks':
+                m_conv = max(15, min(240, max(1, int(getattr(self, 'sleep_tracks_left', 1) or 1)) * 15))
+                self.sleep_mode = 'time'
+                self.sleep_deadline = time.monotonic() + m_conv * 60
+                self.sleep_total = m_conv
+                self.sleep_tracks_left = 0
+                self.sleep_ends_wall = time.time() + m_conv * 60
             if getattr(self, 'ambient_preset', None):
                 self.ambient_seq = getattr(self, 'ambient_seq', 0) + 1
             self.ambient_preset = None
             self.ambient_layer = None
             had_proc = self._stop_proc_locked()
+            if force_loop and self.play_mode in ('shuffle', 'single'):
+                self.play_mode = 'loop'
+                persist_loop = True
             self.queue = list(tracks)
             self.queue_seq += 1
             self.index = idx
             self.playing = True
             self.paused = False
             self._fail_streak = 0
-            self.elapsed_base = 0.0
+            self.elapsed_base = init_sec
             self.play_started_mono = 0.0
             self.lyrics = []
             self.lyrics_seq += 1
@@ -3856,12 +5160,17 @@ class QQMusicEngine:
             if open_ui:
                 self.open_ui_seq += 1
                 self._open_ui_mono = time.monotonic()
+                self._open_ui_tab = 'radio' if tracks[idx].get('radio_id') else ''
+            else:
+                self._open_ui_tab = ''
             gen = self._gen
+        if persist_loop:
+            self.set_play_mode('loop')
         if had_proc:
             self._send_aec_flush()
         self._pause_bluetooth_if_streaming()
         self.save_session()
-        threading.Thread(target=self._start_current_track, args=(0.0, gen), daemon=True).start()
+        threading.Thread(target=self._start_current_track, args=(init_sec, gen), daemon=True).start()
         t = self.current_track() or {}
         return {
             'ok': True,
@@ -3883,12 +5192,18 @@ class QQMusicEngine:
         ):
             res = self.sleep_session_stop()
             return dict(res, mode_only=True, title='睡眠模式', source='睡眠模式', message=res.get('message') or '好的，已停止')
-        if raw_clean in ('关闭音乐', '关掉音乐', '停止播放', '暂停播放', '别唱了', '别放了', '不听了'):
+        if raw_clean in (
+            '关闭音乐', '关掉音乐', '停止播放', '暂停播放', '别唱了', '别放了', '不听了', '别讲了', '别说了',
+            '关闭电台', '关掉电台', '停止电台', '关闭收音机', '关掉收音机', '停止收音机', '关闭广播', '关掉广播', '停止广播',
+        ):
             if getattr(self, 'sleep_session', None) is not None:
                 res = self.sleep_session_stop()
                 return dict(res, mode_only=True, title='睡眠模式', source='睡眠模式', message=res.get('message') or '好的，已停止')
             res = self.control('pause')
             return dict(res, mode_only=True, message=res.get('message') or '已暂停播放') if isinstance(res, dict) else res
+        if raw_clean in ('打开电台界面', '打开收音机界面', '电台界面', '收音机界面', '看看电台', '电台列表'):
+            res = self.control('open_radio')
+            return dict(res, mode_only=True, title='电台', source='网络电台', message=res.get('message') or '已打开电台界面')
         sleep_only_tails = {
             '睡眠', '睡眠模式', '助眠', '助眠模式', '助眠音乐', '睡眠音乐', '催眠曲', '摇篮曲', '睡前轻音乐', '钢琴摇篮曲', '睡前音乐',
         } | {n.lower() for _, _, _, n in SLEEP_COMBOS}
@@ -3898,6 +5213,12 @@ class QQMusicEngine:
                 if tail in sleep_only_tails:
                     res = self.sleep_session_stop()
                     return dict(res, mode_only=True, title='睡眠模式', source='睡眠模式', message=res.get('message') or '好的，已停止')
+                if tail in ('音乐', '歌', '歌曲', '播放', '电台', '收音机', '广播', '网络电台', '网络收音机', '故事', '相声', '评书', '听书'):
+                    if getattr(self, 'sleep_session', None) is not None:
+                        res = self.sleep_session_stop()
+                        return dict(res, mode_only=True, title='睡眠模式', source='睡眠模式', message=res.get('message') or '好的，已停止')
+                    res = self.control('pause')
+                    return dict(res, mode_only=True, message=res.get('message') or '已暂停播放') if isinstance(res, dict) else res
                 if tail in (
                     '环境音', '自然音', '自然环境音', '白噪音', '背景音', '助眠音', '音效',
                     '雨声', '细雨', '窗外细雨', '海浪', '海浪声', '海岸慢浪', '森林', '微风', '林间微风', '风声',
@@ -3992,6 +5313,13 @@ class QQMusicEngine:
                 return _wrap_amb_res(self.set_ambient(amb_exact_map[amb_q]))
             if had_amb_suf and amb_q in amb_suf_only:
                 return _wrap_amb_res(self.set_ambient(amb_suf_only[amb_q]))
+        if not explicit_song:
+            matched_radio_id = match_radio_voice_query(raw_q, q)
+            if matched_radio_id:
+                shuf_r = ('随机' in raw_q or '随便' in raw_q or '换一批' in raw_q)
+                rst_r = ('从头' in raw_q or '第一集' in raw_q or '第1集' in raw_q)
+                return self.play_radio(matched_radio_id, shuffle=shuf_r, restart=rst_r)
+
         if 'u盘' in raw_ql or '本地' in raw_ql:
             lq = re.sub(r'^(?:里的|里|的)+', '', re.sub(r'(?i)u盘|本地', '', q).strip()).strip()
             if lq.lower() in ('歌', '音乐', '歌曲', '随便', '随机', '好听的歌', 'random'):
@@ -4058,6 +5386,8 @@ class QQMusicEngine:
         with self._lock:
             if not (0 <= self.index < len(self.queue)):
                 return {'ok': False}
+            if self.queue[self.index].get('is_live'):
+                return {'ok': True, 'live': True, 'elapsed': round(self.elapsed_base, 1)}
             target_sec = max(0.0, min(sec_f, 86400.0))
             dur = self._safe_dur(self.queue[self.index].get('duration'))
             if dur > 1 and target_sec >= dur - 1:
@@ -4103,12 +5433,14 @@ class QQMusicEngine:
                     self.just_started = True
             self.set_play_mode(new_m)
             return {'ok': True, 'play_mode': new_m, 'message': f'已切换为{mode_labels[new_m]}'}
-        if action in ('open', 'open_ui', '打开', '打开音乐'):
+        if action in ('open', 'open_ui', '打开', '打开音乐', 'open_radio', '打开电台', 'open_account'):
+            want_tab = 'radio' if action in ('open_radio', '打开电台') else ('account' if action == 'open_account' else '')
             with self._lock:
                 self.just_started = True
                 self.open_ui_seq += 1
                 self._open_ui_mono = time.monotonic()
-            return {'ok': True, 'state': 'opened', 'message': '已打开QQ音乐界面'}
+                self._open_ui_tab = want_tab
+            return {'ok': True, 'state': 'opened', 'tab': want_tab or 'mine', 'message': '已打开电台界面' if want_tab == 'radio' else '已打开QQ音乐界面'}
         if action in ('duck', 'unduck'):
             do_duck_flush = False
             active = False
@@ -4157,6 +5489,7 @@ class QQMusicEngine:
                     self._clear_sleep_locked()
                 self.ambient_preset = None
                 self.ambient_layer = None
+                self._snapshot_radio_progress_locked()
                 self.just_started = False
                 self.playing = False
                 self.paused = False
@@ -4194,7 +5527,8 @@ class QQMusicEngine:
                     if was_amb or (self._proc is None and (was_paused or self._starting_gen != self._gen)):
                         flush_aec = self._stop_proc_locked()
                         gen = self._gen
-                        threading.Thread(target=self._start_current_track, args=(self.elapsed_base, gen), daemon=True).start()
+                        res_sec = 0.0 if self.queue[self.index].get('is_live') else self.elapsed_base
+                        threading.Thread(target=self._start_current_track, args=(res_sec, gen), daemon=True).start()
                     resp = {'ok': True, 'state': 'playing', 'track': self._public_track(self.queue[self.index])}
                 else:
                     return {'ok': False, 'error': '当前没有暂停的音乐'}
@@ -4225,7 +5559,7 @@ class QQMusicEngine:
                     resp = {'ok': True, 'state': 'playing', 'track': self._public_track(self.queue[self.index])}
                 else:
                     return {'ok': False}
-            elif action in ('next', '下一首', '换一首'):
+            elif action in ('next', '下一首', '换一首', '下一台', '换台', '下一集'):
                 if not self.queue:
                     return {'ok': False, 'error': '播放列表为空'}
                 self.ambient_preset = None
@@ -4242,13 +5576,14 @@ class QQMusicEngine:
                 self._fail_streak = 0
                 self.elapsed_base = 0.0
                 self.play_started_mono = 0.0
+                self._snapshot_radio_progress_locked()
                 if self.index != prev_idx:
                     self.lyrics = []
                     self.lyrics_seq += 1
                 gen = self._gen
                 threading.Thread(target=self._start_current_track, args=(0.0, gen), daemon=True).start()
                 resp = {'ok': True, 'state': 'playing', 'track': self._public_track(self.queue[self.index])}
-            elif action in ('prev', '上一首'):
+            elif action in ('prev', '上一首', '上一台', '上一集'):
                 if not self.queue:
                     return {'ok': False, 'error': '播放列表为空'}
                 self.ambient_preset = None
@@ -4305,9 +5640,18 @@ class QQMusicEngine:
                 gen = self._gen
                 self._starting_gen = gen
                 track = dict(self.queue[self.index])
+                if track.get('is_live'):
+                    seek_sec = 0.0
+                    live_lines = [
+                        {'time': 0.0, 'text': f"正在直播 · {track.get('title', '网络电台')}"},
+                        {'time': 0.1, 'text': track.get('desc') or track.get('artist') or '实时广播伴听 · 可喊“小麦”随时换台'},
+                    ]
+                    if self.lyrics != live_lines:
+                        self.lyrics = live_lines
+                        self.lyrics_seq += 1
                 self.elapsed_base = float(seek_sec)
                 self.play_started_mono = 0.0
-                need_lrc = not self.lyrics
+                need_lrc = (not self.lyrics) and (not track.get('is_live'))
         if had_proc:
             self._send_aec_flush()
         if not can_start:
@@ -4327,8 +5671,13 @@ class QQMusicEngine:
                     self.save_session()
             threading.Thread(target=_load_lrc, args=(track['mid'], gen), daemon=True).start()
 
+        # Live radio tracks use permanent HLS/Icecast URLs from RADIO_BY_ID
+        if track.get('is_live'):
+            st_live = RADIO_BY_ID.get(str(track.get('radio_id') or ''))
+            if st_live and st_live.get('kind') == 'live':
+                track['url'] = st_live['url']
         # Refresh signed remote URL if missing or older than 1 hour (vkey expiry)
-        if not track.get('is_local') and track.get('url'):
+        elif not track.get('is_local') and track.get('url'):
             try:
                 url_expired = track.get('_url_ts') is None or time.monotonic() - float(track['_url_ts']) > 3600
             except (TypeError, ValueError):
@@ -4446,7 +5795,7 @@ class QQMusicEngine:
                 return
         else:
             orig_url = url
-            resolved_url = _resolve_safe_ffmpeg_url(url, track.get('headers'))
+            resolved_url = _resolve_safe_ffmpeg_url(url, track.get('headers'), is_live=bool(track.get('is_live')))
             if not resolved_url:
                 with self._lock:
                     if self._starting_gen == gen:
@@ -4471,14 +5820,16 @@ class QQMusicEngine:
                 )
                 if hdr_str:
                     cmd.extend(['-headers', hdr_str])
+            if track.get('is_live'):
+                cmd.extend(['-fflags', 'nobuffer', '-probesize', '32768', '-analyzeduration', '300000'])
             cmd.extend([
                 '-rw_timeout', '15000000',
                 '-protocol_whitelist', 'http,https,tcp,tls,crypto',
                 '-reconnect', '1', '-reconnect_streamed', '1', '-reconnect_delay_max', '3',
             ])
-        # High-precision conversion to the existing 48kHz float stereo pipeline.
-        # Do not force resampling when the source is already 48kHz.
-        cmd.extend(['-i', url, '-af', f'aresample={OUT_RATE}:resampler=soxr:precision=28',
+        # High-precision conversion + radio broadcast/voice mastering to 48kHz float stereo pipeline.
+        af_chain = _build_audio_filter(track)
+        cmd.extend(['-i', url, '-vn', '-af', af_chain,
                     '-f', 'f32le', '-ac', '2', '-ar', str(OUT_RATE), 'pipe:1'])
 
         env = {**os.environ, 'XDG_RUNTIME_DIR': '/run/user/1000', 'PULSE_SERVER': 'unix:/run/user/1000/pulse/native'}
@@ -4526,15 +5877,17 @@ class QQMusicEngine:
                     study_duck = time.monotonic() < getattr(self, 'study_duck_until', 0.0)
                     is_paused = user_paused or ducked or study_duck
                     if user_paused:
+                        idle_pause_lim = 10.0 if track.get('is_live') else 45.0
                         if pause_started is None:
                             pause_started = time.monotonic()
-                        elif time.monotonic() - pause_started >= 45.0:
-                            # Release idle ffmpeg (~44MB RAM) after 45s of pause; resume will seek cleanly
+                        elif time.monotonic() - pause_started >= idle_pause_lim:
+                            # Release idle ffmpeg (~44MB RAM) after pause; live streams reconnect at live edge (0.0s)
                             paused_idle_release = True
                             if self._proc is proc:
                                 self._proc = None
                                 self._pacat = None
-                            log.info('Paused >45s -> releasing idle ffmpeg decoder (resume at %.1fs)', self.elapsed_base)
+                            log.info('Paused >%.0fs -> releasing idle ffmpeg decoder (resume at %.1fs)',
+                                     idle_pause_lim, 0.0 if track.get('is_live') else self.elapsed_base)
                             break
                     else:
                         pause_started = None
@@ -4663,7 +6016,27 @@ class QQMusicEngine:
                 self.save_session()
             return
         if paused_idle_release:
-            self._start_current_track(cur_elapsed, gen)
+            self._start_current_track(0.0 if track.get('is_live') else cur_elapsed, gen)
+            return
+
+        if track.get('is_live'):
+            drop_retries = self._safe_dur(track.get('_drop_retries'))
+            if got_any and cur_elapsed >= 15.0:
+                drop_retries = 0
+            if drop_retries < 3:
+                track['_drop_retries'] = drop_retries + 1
+                with self._lock:
+                    if gen == self._gen and self.playing and 0 <= self.index < len(self.queue):
+                        self.queue[self.index] = track
+                        self._cached_q_seq = 0
+                time.sleep(0.8)
+                self._start_current_track(0.0, gen)
+                return
+            log.warning('Live radio stream %r dropped repeatedly -> pausing', track.get('title'))
+            with self._lock:
+                if gen == self._gen and self.playing:
+                    self.paused = True
+            self.save_session()
             return
 
         if got_any:
@@ -5173,22 +6546,36 @@ def make_app() -> web.Application:
         for raw_index, item in enumerate(raw_tracks[:200]):
             if not isinstance(item, dict):
                 continue
+            rid = _s(item.get('radio_id'), 64)
+            st_r = RADIO_BY_ID.get(rid) if rid else None
+            if st_r and st_r.get('kind') == 'live':
+                if raw_index == selected_index:
+                    clean_index = len(clean)
+                clean.append(_radio_live_track(st_r))
+                continue
+            if item.get('is_live'):
+                continue
             raw_cov = _s(item.get('cover'), 500)
             raw_th = _s(item.get('thumb'), 500) or raw_cov
+            safe_cov = _safe_cover_url(raw_cov) or (st_r['cover'] if st_r else '')
+            safe_th = _safe_cover_url(raw_th) or safe_cov
             tr = {
                 'mid': _s(item.get('mid'), 128),
                 'media_mid': _s(item.get('media_mid'), 128),
                 'title': _s(item.get('title'), 300),
                 'artist': _s(item.get('artist'), 300),
                 'album': _s(item.get('album'), 300),
-                'cover': _safe_cover_url(raw_cov),
-                'thumb': _safe_cover_url(raw_th),
+                'cover': safe_cov,
+                'thumb': safe_th,
                 'duration': engine._safe_dur(item.get('duration')),
                 'vip': bool(item.get('vip')),
                 'source': _s(item.get('source'), 64),
                 'quality': _s(item.get('quality'), 64),
                 'url': None,
                 'is_local': False,
+                'is_live': False,
+                'radio_id': rid if (st_r and st_r.get('kind') == 'channel') else '',
+                'desc': _s(item.get('desc'), 200) if (st_r and st_r.get('kind') == 'channel') else '',
             }
             raw_url = item.get('url')
             valid_local = False
@@ -5377,7 +6764,7 @@ def make_app() -> web.Application:
             dq = _default_quality_label(cfg)
             with engine._lock:
                 for tr in engine.queue:
-                    if isinstance(tr, dict) and not tr.get('is_local'):
+                    if isinstance(tr, dict) and not tr.get('is_local') and not tr.get('is_live'):
                         tr['url'] = None
                         tr['_url_ts'] = None
                         tr['quality'] = dq
@@ -5595,7 +6982,52 @@ def make_app() -> web.Application:
     app.router.add_get('/api/music/ambient', ambient_api)
     app.router.add_get('/api/music/sleep_session', sleep_session_api)
     app.router.add_post('/api/music/sleep_session', sleep_session_api)
+    async def radio_list_api(_req):
+        return web.json_response(engine.radio_catalog_public())
+
+    async def radio_episodes_api(req):
+        sid = req.query.get('id', '')
+        ref = req.query.get('refresh') == '1'
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, engine.radio_episodes_public, sid, ref)
+        return web.json_response(res, status=200 if res.get('ok') else 400)
+
+    async def radio_play_api(req):
+        body = await _json_body(req)
+        sid = body.get('id')
+        shuf = bool(body.get('shuffle'))
+        open_ui = bool(body.get('open_ui'))
+        t_idx = body.get('track_index')
+        rst = bool(body.get('restart'))
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, engine.play_radio, sid, shuf, open_ui, t_idx, rst)
+        return web.json_response(res, status=200 if res.get('ok') else 400)
+
+    async def radio_fav_api(req):
+        body = await _json_body(req)
+        res = engine.toggle_radio_fav(body.get('id'), body.get('fav'))
+        return web.json_response(res, status=200 if res.get('ok') else 400)
+
+    async def radio_progress_api(req):
+        body = await _json_body(req)
+        if body.get('clear'):
+            res = engine.clear_radio_progress(body.get('id'))
+            return web.json_response(res, status=200 if res.get('ok') else 400)
+        return web.json_response({'ok': False, 'error': '不支持的操作'}, status=400)
+
+    async def radio_audio_mode_api(req):
+        body = await _json_body(req)
+        loop = asyncio.get_running_loop()
+        res = await loop.run_in_executor(None, engine.set_radio_audio_mode, body.get('mode'))
+        return web.json_response(res, status=200 if res.get('ok') else 400)
+
     app.router.add_post('/api/music/ambient', ambient_api)
+    app.router.add_get('/api/music/radio', radio_list_api)
+    app.router.add_get('/api/music/radio/episodes', radio_episodes_api)
+    app.router.add_post('/api/music/radio/play', radio_play_api)
+    app.router.add_post('/api/music/radio/fav', radio_fav_api)
+    app.router.add_post('/api/music/radio/progress', radio_progress_api)
+    app.router.add_post('/api/music/radio/audio_mode', radio_audio_mode_api)
     return app
 
 

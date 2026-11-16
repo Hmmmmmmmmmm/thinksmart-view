@@ -2054,7 +2054,11 @@ def _music_public(st):
             'sleep': st.get('sleep') if isinstance(st.get('sleep'), dict) else None,
             'sleep_session': st.get('sleep_session') if isinstance(st.get('sleep_session'), dict) else None,
             'sleep_preview': st.get('sleep_preview') if isinstance(st.get('sleep_preview'), dict) else None,
-            'track': {k: str(t.get(k) or '')[:300] for k in ('title', 'artist', 'cover', 'mid')} if t else None}
+            'track': ({
+                **{k: str(t.get(k) or '')[:300] for k in ('title', 'artist', 'mid', 'radio_id', 'desc')},
+                'cover': str(t.get('cover') or '')[:1600],
+                'is_live': bool(t.get('is_live')),
+            } if t else None)}
 
 
 

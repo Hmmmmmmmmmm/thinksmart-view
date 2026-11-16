@@ -2480,7 +2480,7 @@ function safeCover(u) {
   if (typeof u !== 'string') return '';
   const s = u.trim();
   if (/[\x00-\x20\x7f\\]/.test(s)) return '';
-  return /^https?:\/\/([a-z0-9-]+\.)*(gtimg\.cn|qq\.com|qlogo\.cn|qpic\.cn)\//i.test(s) ? s : '';
+  return /^(?:https?:\/\/([a-z0-9-]+\.)*(gtimg\.cn|qq\.com|qlogo\.cn|qpic\.cn)\/|data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$)/i.test(s) ? s : '';
 }
 let mSeekDrag = false, mSeekRect = null, mSeekSec = 0, mSeekRaf = 0, mSeekHoldUntil = 0, mSeekGuardUntil = 0, mSeekQueued = null, mSeekBusy = false, mSeekOffCancel = false, mFingerX = 0, mBarW = 0, lastFillTf = '', lastThumbTf = '', lastTipTf = '', cancelHomeScrub = () => {};
 function syncBarWidth() {
@@ -2527,6 +2527,19 @@ function paintHomeLyric(overrideSec = null) {
     lastLrcText = '';
     return;
   }
+  if (t.is_live) {
+    el.className = 'm-lyric';
+    const l1 = `${m && m.playing ? '正在直播' : '直播已暂停'} · ${t.title || '网络电台'}`;
+    const l2 = t.desc || (homeLyrics[1] && homeLyrics[1][1]) || '实时广播伴听 · 可喊“小麦”随时换台';
+    setText(el2, l2);
+    if (el.textContent !== l1) {
+      const had = !!lastLrcText && overrideSec === null && mBase && mBase.playing;
+      el.textContent = l1;
+      lastLrcText = l1;
+      if (had) replay(box, 'swap');
+    }
+    return;
+  }
   const sec = overrideSec !== null ? overrideSec : liveMusicSec();
   const idx = lyricIdxAtSec(sec);
   const line = idx >= 0 ? (homeLyrics[idx][1] || '') : '';
@@ -2551,7 +2564,7 @@ function paintHomeLyric(overrideSec = null) {
   }
 }
 function syncLrcTimer() {
-  const want = visible && mBase && mBase.playing && homeLyrics.length > 0 && !(st && st.music && st.music.ambient);
+  const want = visible && mBase && mBase.playing && homeLyrics.length > 0 && !(st && st.music && (st.music.ambient || (st.music.track && st.music.track.is_live)));
   if (want) { if (!lrcTimer) lrcTimer = setInterval(() => { if (!mSeekDrag) paintHomeLyric(); }, 350); }
   else if (lrcTimer) { clearInterval(lrcTimer); lrcTimer = 0; }
 }
@@ -2631,7 +2644,7 @@ function renderMusic(m) {
   setText($('mArtist'), artistInline);
   if (trackChanged) { if (lastTitle !== null) { replay($('mTitle'), 'swap'); if (artistInline) replay($('mArtist'), 'swap'); } lastTitle = title; mSeekHoldUntil = 0; }
   toggleCls($('mPrev'), 'off', !t && !amb); toggleCls($('mNext'), 'off', !t && !amb);
-  const showProg = !!(t && !amb);
+  const showProg = !!(t && !amb && !t.is_live);
   const wasHidden = $('mProg').style.display === 'none';
   setDisp($('mProg'), showProg ? 'flex' : 'none');
   if (showProg && (wasHidden || !mBarW)) syncBarWidth();
@@ -2705,7 +2718,8 @@ function syncSecTimer() {
 const openMusic = () => {
   if (sleepNow()) { openTimerPage('night'); return; }
   if (st && st.music && st.music.ambient) { openTimerPage('setup', 'focus'); return; }
-  post({ cmd: 'navigate', url: 'http://127.0.0.1:8091/' });
+  const isRadioNow = !!(st && st.music && st.music.track && st.music.track.radio_id);
+  post({ cmd: 'navigate', url: 'http://127.0.0.1:8091/', subCmd: isRadioNow ? 'openRadio' : '' });
 };
 $('mArt').onclick = openMusic;
 $('mBody').onclick = e => { if ($('mProg').contains(e.target) || monoNow() < mSeekGuardUntil) return; openMusic(); };

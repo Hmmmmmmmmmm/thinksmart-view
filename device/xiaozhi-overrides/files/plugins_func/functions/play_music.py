@@ -15,9 +15,12 @@ play_music_function_desc = {
     "function": {
         "name": "play_music",
         "description": (
-            "播放音乐或控制音乐播放（默认使用QQ音乐无损曲库，同时支持Hi-Res与U盘本地曲库），也负责睡前助眠和定时关闭。"
+            "播放音乐、电台广播、少儿故事英语、相声评书，或控制播放（默认使用QQ音乐无损曲库，同时支持高音质网络电台、听书断点续播与U盘本地曲库），也负责睡前助眠和定时关闭。"
             "当用户要求播放歌曲、歌手、'我喜欢的音乐'、'每日推荐'、'我的歌单'、U盘音乐，"
-            "或者要求暂停、继续播放、停止播放、下一首、上一首时调用本工具。"
+            "或要求播放广播电台/音乐电台（如中国之声、音乐之声、亚洲音乐台、怀旧金曲广播、爵士轻音乐台、天津相声广播、交通广播、香港电台等）、"
+            "少儿故事与英语名著（米小圈上学记、牛津树英语、新概念英语、唐诗三百首、凯叔讲故事、成语故事、睡前故事等）、"
+            "相声评书（郭德纲相声、单田芳评书、三国演义评书、水浒传评书、刘兰芳岳飞传等），"
+            "或者要求打开音乐/电台界面、暂停、继续播放、停止播放、下一首/下一台/下一集、上一首/上一台/上一集时调用本工具。"
             "当用户说要睡觉了、要助眠的声音（雨声、海浪、白噪音、褐噪音、助眠钢琴、摇篮曲等），"
             "或者要求'N分钟后关'、'几点关'、'放一整夜'、'再放半小时'时，也调用本工具（不要设闹钟或倒计时）。"
         ),
@@ -27,8 +30,8 @@ play_music_function_desc = {
                 "song_name": {
                     "type": "string",
                     "description": (
-                        "要播放的歌名、歌手名、'我喜欢的音乐'、'每日推荐'或控制指令。"
-                        "控制指令可传：'pause'(暂停)、'resume'(继续)、'stop'(停止)、'next'(下一首)、'prev'(上一首)。"
+                        "要播放的歌名、歌手名、电台/故事/评书名称（如'中国之声'、'亚洲音乐台'、'米小圈上学记'、'三国演义评书'）、'我喜欢的音乐'、'每日推荐'或控制指令。"
+                        "控制指令可传：'pause'(暂停)、'resume'(继续)、'stop'(停止)、'next'(下一首/下一台)、'prev'(上一首/上一台)、'open_ui'(打开音乐界面)、'open_radio'(打开电台界面)。"
                         "若用户未指定具体歌曲（如'随便放首歌'），传 'random'。"
                         "用户说要睡觉了（没指定声音）传 'sleep'；说不睡了、关闭睡眠模式或关掉助眠传 'stop_sleep'；"
                         "只给正在放的声音加定时传 'timer'；延长定时传 'extend'；"
@@ -155,10 +158,12 @@ async def play_music(conn, song_name: str = "random", sleep_minutes=None, sleep_
         ctrl_map = {
             "pause": "pause", "暂停": "pause", "暂停播放": "pause",
             "resume": "resume", "继续": "resume", "继续播放": "resume",
-            "stop": "stop", "停止": "stop", "停止播放": "stop", "关闭音乐": "stop", "别唱了": "stop", "不听了": "stop",
-            "next": "next", "下一首": "next", "换一首": "next", "切歌": "next",
-            "prev": "prev", "上一首": "prev",
+            "stop": "stop", "停止": "stop", "停止播放": "stop", "关闭音乐": "stop", "关掉音乐": "stop", "别唱了": "stop", "不听了": "stop", "别讲了": "stop",
+            "关闭电台": "stop", "关掉电台": "stop", "停止电台": "stop", "关闭收音机": "stop", "关掉收音机": "stop", "关闭广播": "stop", "关掉广播": "stop",
+            "next": "next", "下一首": "next", "换一首": "next", "切歌": "next", "下一台": "next", "换台": "next", "换个台": "next", "下一个台": "next", "下一集": "next",
+            "prev": "prev", "上一首": "prev", "上一台": "prev", "上一个台": "prev", "上一集": "prev",
             "open": "open_ui", "open_ui": "open_ui", "打开音乐": "open_ui", "打开音乐界面": "open_ui", "打开qq音乐": "open_ui",
+            "open_radio": "open_radio", "打开电台界面": "open_radio", "打开收音机界面": "open_radio", "电台界面": "open_radio", "收音机界面": "open_radio",
             "mode": "toggle_mode", "toggle_mode": "toggle_mode", "切换模式": "toggle_mode", "切换播放模式": "toggle_mode",
         }
         if q_low in ctrl_map:

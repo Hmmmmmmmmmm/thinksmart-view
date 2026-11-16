@@ -1060,7 +1060,7 @@ button:focus-visible { outline: 3px solid #5ab8ff; outline-offset: -3px; }
 #sleepMenu .slp-opt.active { background: #14291f; border-color: var(--green); color: #8ff0c4; }
 #sleepMenu .slp-cancel { background: transparent; border-color: #6a3036; color: #ffb3b3; }
 
-/* ===== 浅色主题 (2026-11-12): warm beige light palette; teal is the music accent here. Chosen in the brightness panel. ===== */
+/* ===== 浅色主题 (2026-11-12): warm sand light palette; teal is the music accent here. Chosen in the brightness panel. ===== */
 html[data-theme="light"] {
   --bg: #d5ccc0; --rail: #ddd5c8; --panel: #e7e0d5; --panel-2: #dad2c6; --line: #ccc3b6;
   --green: #0b7470; --green-2: #095e5b; --green-ink: #faf8f4; --gold: #84510a;
@@ -1141,6 +1141,178 @@ html[data-theme="light"] .main-ctrls .ctrl-btn.small:active { background: #cec5b
 html[data-theme="light"] .sec-title[style*="96a4bc"] { color: var(--dim) !important; }
 html[data-theme="light"] .pl-card.active .pl-name { color: var(--green-2); }
 html[data-theme="light"] .singer-ava { background: #c7dfda !important; color: #0b6864; box-shadow: none; }
+
+/* 2026-11-15 (Claude): the left key is always 分词; it rests dim until pinyin is being typed */
+.kbd-key.fn.idle { opacity: .38; }
+
+/* ===== 2026-11-16 R3: 电台深度优化 — 全国/本地港澳广播 + 故事英语 + 相声评书 + 继续收听条 + 选集正倒序自动定位 (400/700 integer-px) ===== */
+.rail { gap: 4px; padding: 14px 0 12px; }
+.rail > .home-btn:first-child { margin-bottom: 8px; }
+.tab-btn { padding: 9px 0 8px; gap: 5px; }
+body.live-radio #progThumb { display: none; }
+body.live-radio #progTrack { cursor: default; }
+.np-state-tag.live-on { background: rgba(255, 92, 92, 0.18); color: #ff9c9c; border-color: rgba(255, 110, 110, 0.44); }
+.np-state-tag.live-on i { background: #ff5c5c; box-shadow: none; }
+#radioChips { gap: 7px; }
+#radioChips .chip { padding: 0 12px; height: 40px; font-size: 14px; line-height: 20px; font-weight: 700; }
+.hero-t-row { display: flex; align-items: center; gap: 8px; }
+.radio-dsp-pill {
+  height: 28px; padding: 0 10px; border-radius: 8px; cursor: pointer; flex-shrink: 0;
+  border: 1px solid rgba(30, 217, 139, 0.48); background: #142b20; color: #ebfff6;
+  font-size: 13px; line-height: 26px; font-weight: 700; white-space: nowrap;
+  transition: background-color .12s ease, border-color .12s ease; transform: none;
+}
+.radio-dsp-pill.raw { border-color: var(--line); background: var(--panel-2); color: var(--muted); }
+.radio-dsp-pill:active { transform: none; background: #1c3d2d; }
+/* Crisp integer-px Account & Audio Quality typography (400/700 native weights, no faux-bold 800, no half-px, no transform layer blur) */
+#accountInfoBox { gap: 12px !important; }
+.acc-pane { gap: 12px; padding-bottom: 12px; }
+.acc-head-bar { min-height: 32px; }
+.acc-head-bar h2 { font-size: 24px; line-height: 32px; font-weight: 700; letter-spacing: 0; }
+.acc-state-pill {
+  height: 30px; padding: 0 12px; font-size: 14px; line-height: 30px; font-weight: 700;
+  display: inline-flex; align-items: center;
+}
+.acc-hero-card { padding: 16px 20px; gap: 14px; border-radius: 20px; }
+.acc-hero-top { gap: 16px; }
+.acc-avatar-lg { width: 76px; height: 76px; border: 2px solid var(--text); }
+.acc-hero-name { font-size: 22px; line-height: 28px; font-weight: 700; gap: 8px; letter-spacing: 0; }
+.vip-tag {
+  height: 24px; padding: 0 10px; font-size: 13px; line-height: 24px; font-weight: 700;
+  display: inline-flex; align-items: center;
+}
+.acc-hero-sub { font-size: 14px; line-height: 20px; font-weight: 400; margin-top: 4px; color: #b4bfd4; }
+.acc-hero-sync { font-size: 14px; line-height: 20px; font-weight: 700; margin-top: 4px; }
+.acc-btn-row { gap: 10px; }
+.acc-btn-row button { height: 44px; padding: 0 16px; font-size: 15px; line-height: 20px; font-weight: 700; }
+.acc-setting-card { padding: 16px 20px; gap: 10px; border-radius: 20px; }
+.acc-setting-card h3 { font-size: 18px; line-height: 24px; font-weight: 700; letter-spacing: 0; color: var(--text); }
+.acc-setting-card p { font-size: 14px; line-height: 20px; font-weight: 400; color: #b4bfd4; margin-top: -2px; }
+.qual-seg { gap: 10px; }
+.qual-btn {
+  height: 48px; padding: 0 10px; border-radius: 14px;
+  border: 2px solid var(--line); background: var(--panel-2);
+  color: var(--text); font-size: 16px; line-height: 22px; font-weight: 700; letter-spacing: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background-color .12s ease, border-color .12s ease, color .12s ease;
+  transform: none;
+}
+.qual-btn:active { transform: none; background: #26334f; }
+.qual-btn.active { background: #142b20; border-color: var(--green); color: #ebfff6; }
+.qr-status { font-size: 15px; line-height: 22px; font-weight: 400; }
+.radio-recent-wrap { display: none; flex-direction: column; gap: 6px; margin-bottom: 8px; flex-shrink: 0; }
+.radio-recent-wrap.show { display: flex; }
+.rr-head { display: flex; align-items: center; justify-content: space-between; padding: 0 2px; }
+.rr-lbl { font-size: 13px; line-height: 18px; font-weight: 700; color: var(--muted); }
+.rr-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.rr-item {
+  height: 46px; padding: 0 8px 0 12px; border-radius: 12px; cursor: pointer;
+  background: var(--panel); border: 1px solid var(--line); border-left: 4px solid var(--green);
+  display: flex; align-items: center; gap: 8px; min-width: 0;
+}
+.rr-item:active { transform: scale(0.98); background: var(--panel-2); }
+.rr-play { width: 16px; height: 16px; color: var(--green); flex-shrink: 0; }
+.rr-info { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; }
+.rr-title { font-size: 14px; line-height: 20px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rr-pos { font-size: 12px; line-height: 18px; font-weight: 700; color: var(--green); white-space: nowrap; flex-shrink: 0; }
+.rr-del {
+  width: 28px; height: 28px; border-radius: 8px; border: none; background: transparent;
+  color: var(--dim); font-size: 16px; line-height: 28px; font-weight: 700; cursor: pointer; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.rr-del:active { background: var(--panel-2); color: var(--text); }
+.radio-grid {
+  flex: 1; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; overscroll-behavior: contain; scrollbar-width: none;
+  display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: start; gap: 10px;
+  padding: 2px 0 16px 0; contain: layout paint;
+}
+.radio-grid::-webkit-scrollbar { width: 0; display: none; }
+.radio-card {
+  min-height: 80px; padding: 10px 8px 10px 10px; border-radius: 16px; cursor: pointer;
+  background: var(--panel); border: 2px solid var(--line); color: var(--text);
+  display: flex; align-items: center; gap: 8px; text-align: left; contain: layout paint;
+}
+.radio-card:active { transform: scale(0.98); background: var(--panel-2); }
+.radio-card.playing { border-color: var(--green); background: rgba(30, 217, 139, 0.10); }
+.rc-cover-wrap { position: relative; width: 48px; height: 48px; border-radius: 12px; overflow: hidden; flex-shrink: 0; background: var(--panel-2); }
+.rc-cover { width: 48px; height: 48px; display: block; object-fit: cover; }
+.rc-eq {
+  position: absolute; inset: 0; background: rgba(10, 14, 20, 0.56);
+  display: none; align-items: center; justify-content: center;
+}
+.radio-card.playing .rc-eq { display: flex; }
+.rc-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.rc-top { display: flex; align-items: center; gap: 5px; min-width: 0; }
+.rc-title { font-size: 16px; line-height: 22px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.radio-card.playing .rc-title { color: var(--green); }
+.rc-pill {
+  flex-shrink: 0; height: 20px; padding: 0 5px; border-radius: 6px;
+  font-size: 12px; line-height: 20px; font-weight: 700;
+  background: var(--panel-2); color: var(--muted);
+}
+.rc-pill.live { background: rgba(255, 96, 96, 0.18); color: #ff8585; }
+.rc-sub { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rc-sub.resumed { color: var(--green); font-weight: 700; }
+.rc-acts { display: flex; flex-direction: column; align-items: flex-end; justify-content: center; gap: 4px; flex-shrink: 0; }
+.rc-fav {
+  width: 32px; height: 32px; border-radius: 10px; border: none; background: transparent;
+  color: var(--dim); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; cursor: pointer;
+}
+.rc-acts.has-ep .rc-fav { width: 30px; height: 26px; }
+.rc-fav svg.i { width: 19px; height: 19px; }
+.rc-fav.on { color: #ff5c7c; }
+.rc-fav:active { transform: scale(0.90); background: var(--panel-2); }
+.rc-ep-btn {
+  height: 26px; padding: 0 9px; border-radius: 8px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font-size: 12px; line-height: 24px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.rc-ep-btn:active { transform: scale(0.94); }
+.radio-ep-box { flex: 1; min-height: 0; display: none; flex-direction: column; gap: 10px; }
+.radio-ep-box.show { display: flex; }
+.rep-bar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-shrink: 0;
+  padding: 12px 14px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line);
+}
+.rep-left { display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1; }
+.rep-back {
+  height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font-size: 14px; line-height: 20px; font-weight: 700; cursor: pointer; white-space: nowrap; flex-shrink: 0;
+}
+.rep-back:active { transform: scale(0.96); }
+.rep-meta { min-width: 0; flex: 1; }
+.rep-title { font-size: 18px; line-height: 24px; font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rep-sub { font-size: 13px; line-height: 18px; font-weight: 400; color: var(--muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rep-sort-btn {
+  height: 40px; padding: 0 12px; border-radius: 12px; border: 1px solid var(--line);
+  background: var(--panel-2); color: var(--text); font-size: 13px; line-height: 20px; font-weight: 700; cursor: pointer; white-space: nowrap;
+}
+.rep-sort-btn:active { transform: scale(0.96); }
+.song-row.bookmarked { box-shadow: inset 4px 0 0 var(--green); }
+.rep-mark {
+  display: inline-block; padding: 0 7px; height: 20px; line-height: 20px; border-radius: 6px;
+  font-size: 12px; font-weight: 700; background: rgba(30, 217, 139, 0.16); color: var(--green); margin-right: 6px; flex-shrink: 0;
+}
+.row-dur.live-tag { color: var(--green); font-weight: 700; font-size: 12px; }
+html[data-theme="light"] .np-state-tag.live-on { background: #f5d0d0; color: #a82424; border-color: #dfa6a6; }
+html[data-theme="light"] .np-state-tag.live-on i { background: #c22b2b; }
+html[data-theme="light"] .radio-dsp-pill { background: #cbe3dd; border-color: #0b7470; color: #07524e; }
+html[data-theme="light"] .radio-dsp-pill:active { background: #bcd9d2; }
+html[data-theme="light"] .radio-dsp-pill.raw { background: var(--panel-2); border-color: var(--line); color: var(--muted); }
+html[data-theme="light"] .acc-hero-sub, html[data-theme="light"] .acc-setting-card p { color: #3c4047; }
+html[data-theme="light"] .qual-btn { background: var(--panel-2); border-color: var(--line); color: var(--text); }
+html[data-theme="light"] .qual-btn:active { background: #d6cdc0; }
+html[data-theme="light"] .qual-btn.active { background: #cbe3dd; border-color: #0b7470; color: #07524e; }
+html[data-theme="light"] .rr-item { background: var(--panel); border-color: var(--line); border-left-color: #0f8a5f; }
+html[data-theme="light"] .rr-pos, html[data-theme="light"] .rr-play { color: #0b6848; }
+html[data-theme="light"] .radio-card { background: var(--panel); border-color: var(--line); }
+html[data-theme="light"] .radio-card:active { background: var(--panel-2); }
+html[data-theme="light"] .radio-card.playing { background: #d5ece4; border-color: #0f8a5f; }
+html[data-theme="light"] .radio-card.playing .rc-title, html[data-theme="light"] .rc-sub.resumed { color: #0b6848; }
+html[data-theme="light"] .rc-pill.live { background: #f5d0d0; color: #a82424; }
+html[data-theme="light"] .rc-fav.on { color: #c2334d; }
+html[data-theme="light"] .song-row.bookmarked { box-shadow: inset 4px 0 0 #0f8a5f; }
+html[data-theme="light"] .rep-mark { background: #cde8de; color: #0b6848; }
+html[data-theme="light"] .row-dur.live-tag { color: #0b6848; }
 </style>
 </head>
 <body>
@@ -1171,6 +1343,7 @@ html[data-theme="light"] .singer-ava { background: #c7dfda !important; color: #0
     <symbol id="i-switch" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3.5"/><path d="M3 19a6 6 0 0 1 12 0M16 7h5M19 4.5L21.5 7 19 9.5M21 14h-5M18 11.5L15.5 14 18 16.5"/></symbol>
     <symbol id="i-usb" viewBox="0 0 24 24"><rect x="7" y="9" width="10" height="12" rx="2"/><path d="M9 9V3h6v6M10.5 5.5h.01M13.5 5.5h.01"/></symbol>
     <symbol id="i-user" viewBox="0 0 24 24"><circle cx="12" cy="8.5" r="3.8"/><path d="M4.5 20a7.5 7.5 0 0 1 15 0"/></symbol>
+    <symbol id="i-radio" viewBox="0 0 24 24"><rect x="3" y="8" width="18" height="12" rx="2.5"/><path d="M7 8l9-5M8 14h4M8 17h2"/><circle cx="16.5" cy="14.5" r="2.5"/></symbol>
     <symbol id="i-qr" viewBox="0 0 24 24"><rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><path d="M14 14h2v2h-2zM18 18h2v2h-2zM18 14h2M14 18v2"/></symbol>
   </defs>
 </svg>
@@ -1184,6 +1357,7 @@ html[data-theme="light"] .singer-ava { background: #c7dfda !important; color: #0
   <button class="tab-btn active" id="tabBtnMine" onclick="switchTab('mine')"><svg class="i"><use href="#i-heart"/></svg>我的</button>
   <button class="tab-btn" id="tabBtnQueue" onclick="switchTab('queue')"><svg class="i"><use href="#i-queue"/></svg>播放列表<span class="tab-badge" id="qCount">0</span></button>
   <button class="tab-btn" id="tabBtnToplist" onclick="switchTab('toplist')"><svg class="i"><use href="#i-chart"/></svg>排行榜</button>
+  <button class="tab-btn" id="tabBtnRadio" onclick="switchTab('radio')"><svg class="i"><use href="#i-radio"/></svg>电台</button>
   <button class="tab-btn" id="tabBtnSearch" onclick="switchTab('search')"><svg class="i"><use href="#i-search"/></svg>搜索</button>
   <div class="rail-spacer"></div>
   <div class="rail-clock" id="railClock" aria-label="现在时间">--:--</div>
@@ -1312,6 +1486,54 @@ html[data-theme="light"] .singer-ava { background: #c7dfda !important; color: #0
     <div class="song-list" id="searchSongs"></div>
   </section>
 
+  <!-- Tab Radio: 全国/本地港澳广播 + 少儿故事英语 + 相声评书 (继续收听 & 断点续播 & 正倒序选集) -->
+  <section class="tab-view" id="viewRadio">
+    <div class="chip-scroll" id="radioChips">
+      <button class="chip active" data-rcat="all" onclick="selectRadioCat('all', this)">全部精选</button>
+      <button class="chip" data-rcat="fm" onclick="selectRadioCat('fm', this)">全国广播</button>
+      <button class="chip" data-rcat="music_fm" onclick="selectRadioCat('music_fm', this)">音乐电台</button>
+      <button class="chip" data-rcat="kids" onclick="selectRadioCat('kids', this)">故事英语</button>
+      <button class="chip" data-rcat="crosstalk" onclick="selectRadioCat('crosstalk', this)">相声评书</button>
+      <button class="chip" id="radioFavChip" data-rcat="fav" onclick="selectRadioCat('fav', this)">收藏电台</button>
+    </div>
+    <div class="hero" id="radioMainHero">
+      <div>
+        <div class="hero-t-row">
+          <span class="hero-t" id="radioHeroTitle">精选电台 · 故事评书</span>
+          <button class="radio-dsp-pill" id="btnRadioDsp" type="button" onclick="cycleRadioAudioMode()">臻享增强</button>
+        </div>
+        <div class="hero-s" id="radioHeroSub">点卡片自动续播 · 点“选集”可挑集</div>
+      </div>
+      <div class="sec-actions">
+        <button class="btn-ghost" id="btnRadioNextBatch" onclick="shuffleActiveOrRandomRadio()"><svg class="i"><use href="#i-shuffle"/></svg><span id="radioShufLbl">随机听个台</span></button>
+        <button class="btn-voice" id="btnVoiceRadio" onclick="triggerVoiceSearch('radio')"><svg class="i"><use href="#i-mic"/></svg>语音选台</button>
+      </div>
+    </div>
+    <div class="radio-recent-wrap" id="radioRecentWrap">
+      <div class="rr-head"><span class="rr-lbl">继续收听 · 上次听书进度</span></div>
+      <div class="rr-list" id="radioRecentList"></div>
+    </div>
+    <div class="radio-grid" id="radioGrid"></div>
+
+    <div class="radio-ep-box" id="radioEpBox">
+      <div class="rep-bar">
+        <div class="rep-left">
+          <button class="rep-back" type="button" onclick="closeRadioEpisodes()">← 返回</button>
+          <div class="rep-meta">
+            <div class="rep-title" id="repTitle">节目选集</div>
+            <div class="rep-sub" id="repSub">正在加载节目单…</div>
+          </div>
+        </div>
+        <div class="sec-actions">
+          <button class="rep-sort-btn" id="repBtnSort" type="button" onclick="togglePickerSort()">正序 ↑</button>
+          <button class="btn-ghost" id="repBtnRestart" type="button" onclick="playPickerChannelRestart()">从头播</button>
+          <button class="btn-green" id="repBtnResume" type="button" onclick="playPickerChannelResume()"><svg class="i"><use href="#i-play"/></svg><span id="repResumeLbl">续播</span></button>
+        </div>
+      </div>
+      <div class="song-list" id="radioEpList"></div>
+    </div>
+  </section>
+
   <!-- Tab 5: Account -->
   <section class="tab-view" id="viewAccount">
     <div class="acc-pane">
@@ -1344,6 +1566,16 @@ html[data-theme="light"] .singer-ava { background: #c7dfda !important; color: #0
             <button class="qual-btn active" data-q="lossless" onclick="setQualityLevel('lossless')">SQ / Hi-Res 无损</button>
             <button class="qual-btn" data-q="hq" onclick="setQualityLevel('hq')">HQ 高品 320k</button>
             <button class="qual-btn" data-q="standard" onclick="setQualityLevel('standard')">标准流畅</button>
+          </div>
+        </div>
+
+        <div class="acc-setting-card">
+          <h3>电台与听书音质调节</h3>
+          <p>全线电台已开启 AAC 立体声高清流 · 针对机身扬声器定制母带调音与稳压</p>
+          <div class="qual-seg" id="radioQualSeg">
+            <button class="qual-btn active" data-rq="hifi" onclick="setRadioAudioMode('hifi')">臻享增强（最佳）</button>
+            <button class="qual-btn" data-rq="voice" onclick="setRadioAudioMode('voice')">清澈人声</button>
+            <button class="qual-btn" data-rq="raw" onclick="setRadioAudioMode('raw')">原声直通</button>
           </div>
         </div>
       </div>
@@ -1458,7 +1690,7 @@ const PLAY_MODES = {
   shuffle: ['i-shuffle', '随机播放'],
   single: ['i-one', '单曲循环']
 };
-const TAB_TITLES = { mine: '我的音乐', queue: '正在播放', toplist: '排行榜', search: '搜索', account: '账号信息' };
+const TAB_TITLES = { mine: '我的音乐', queue: '正在播放', toplist: '排行榜', radio: '电台 · 故事评书', search: '搜索', account: '账号信息' };
 
 const SINGERS = [
   '周杰伦', '陈奕迅', '林俊杰', '邓紫棋', '刀郎', '王菲', '张学友', '孙燕姿',
@@ -1767,8 +1999,9 @@ function updateKbdDynamicKeys() {
   const fnLeft = document.getElementById('kbdFnLeft');
   const spBtn = document.getElementById('kbdSpaceBtn');
   if (fnLeft && kbdMode === 'zh') {
-    fnLeft.textContent = pyBuf ? "分词 '" : '清空';
+    fnLeft.textContent = "分词 '";
     fnLeft.classList.toggle('on', !!pyBuf);
+    fnLeft.classList.toggle('idle', !pyBuf);
   }
   if (spBtn) {
     if (kbdMode === 'zh' && pyBuf && curImeCands.length) {
@@ -1880,7 +2113,7 @@ function renderKbdGrid() {
     r1 = ['q','w','e','r','t','y','u','i','o','p'].map(keyBtn).join('');
     r2 = ['a','s','d','f','g','h','j','k','l'].map(keyBtn).join('');
     const leftFn = kbdMode === 'zh'
-      ? `<button type="button" class="kbd-key fn${pyBuf ? ' on' : ''}" id="kbdFnLeft" onclick="kbdLeftAction()">${pyBuf ? "分词 '" : '清空'}</button>`
+      ? `<button type="button" class="kbd-key fn${pyBuf ? ' on' : ' idle'}" id="kbdFnLeft" onclick="kbdLeftAction()">分词 '</button>`
       : `<button type="button" class="kbd-key fn${kbdShift ? ' on' : ''}" id="kbdFnLeft" onclick="toggleKbdShift()">⇧ 大写</button>`;
     r3 = leftFn +
       ['z','x','c','v','b','n','m'].map(keyBtn).join('') +
@@ -2093,8 +2326,6 @@ function kbdLeftAction() {
         pyBuf += "'";
         renderImeBar();
       }
-    } else {
-      kbdClear();
     }
   }
 }
@@ -2207,15 +2438,24 @@ function onSearchInputManual(ev) {
   scheduleSmartbox();
 }
 
-const HINT_DEFAULT = icon('i-mic') + '喊“小麦小麦”语音控制';
+const HINT_DEFAULT = icon('i-mic') + '喊“小麦小麦”';
 const VOICE_BTN_DEFAULT = '<svg class="i"><use href="#i-mic"/></svg>语音点歌';
+const RADIO_VOICE_BTN_DEFAULT = '<svg class="i"><use href="#i-mic"/></svg>语音选台';
 let voiceHintTimer = null, voiceWakeBusy = false;
-async function triggerVoiceSearch() {
+function resetVoiceWakeBtns() {
+  const b1 = document.getElementById('btnVoiceSearch');
+  const b2 = document.getElementById('btnVoiceRadio');
+  if (b1) { b1.disabled = false; b1.innerHTML = VOICE_BTN_DEFAULT; b1.style.borderColor = ''; b1.style.color = ''; }
+  if (b2) { b2.disabled = false; b2.innerHTML = RADIO_VOICE_BTN_DEFAULT; b2.style.borderColor = ''; b2.style.color = ''; }
+}
+async function triggerVoiceSearch(mode = 'song') {
   if (voiceWakeBusy) return;
   voiceWakeBusy = true;
+  const isRadio = mode === 'radio' || currentTab === 'radio';
   const hint = document.getElementById('statusHint');
-  const btn = document.getElementById('btnVoiceSearch');
+  const btn = document.getElementById(isRadio ? 'btnVoiceRadio' : 'btnVoiceSearch') || document.getElementById('btnVoiceSearch');
   if (voiceHintTimer) { clearTimeout(voiceHintTimer); voiceHintTimer = null; }
+  resetVoiceWakeBtns();
   if (btn) { btn.disabled = true; btn.innerHTML = icon('i-mic') + '正在唤醒…'; }
   let ok = false;
   try {
@@ -2225,18 +2465,18 @@ async function triggerVoiceSearch() {
   voiceWakeBusy = false;
   if (btn) btn.disabled = false;
   if (ok) {
-    if (hint) { hint.innerHTML = icon('i-mic') + '小智在听，直接说歌名或歌手…'; hint.style.color = 'var(--green)'; }
-    if (btn) { btn.innerHTML = icon('i-mic') + '请说歌名…'; btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)'; }
+    if (hint) { hint.innerHTML = icon('i-mic') + (isRadio ? '小麦在听，请说电台或评书名…' : '小麦在听，直接说歌名或歌手…'); hint.style.color = 'var(--green)'; }
+    if (btn) { btn.innerHTML = icon('i-mic') + (isRadio ? '请说电台名…' : '请说歌名…'); btn.style.borderColor = 'var(--green)'; btn.style.color = 'var(--green)'; }
     voiceHintTimer = setTimeout(() => {
       voiceHintTimer = null;
       if (hint) { hint.innerHTML = HINT_DEFAULT; hint.style.color = ''; }
-      if (btn) { btn.innerHTML = VOICE_BTN_DEFAULT; btn.style.borderColor = ''; btn.style.color = ''; }
+      resetVoiceWakeBtns();
     }, 5000);
   } else {
     if (btn) { btn.innerHTML = icon('i-mic') + '唤醒失败，重试'; btn.style.borderColor = '#ff7b7b'; btn.style.color = '#ffb4b4'; }
     voiceHintTimer = setTimeout(() => {
       voiceHintTimer = null;
-      if (btn) { btn.innerHTML = VOICE_BTN_DEFAULT; btn.style.borderColor = ''; btn.style.color = ''; }
+      resetVoiceWakeBtns();
     }, 2600);
   }
 }
@@ -2275,7 +2515,7 @@ function safeImg(u) {
   if (typeof u !== 'string') return '';
   const s = u.trim();
   if (/[\x00-\x20\x7f\\]/.test(s)) return '';
-  return /^(?:https?:\/\/(?:[a-z0-9-]+\.)*(?:gtimg\.cn|qq\.com|qlogo\.cn|qpic\.cn)\/|data:image\/(?:png|jpeg|jpg|gif|webp);base64,[A-Za-z0-9+/=]+$)/i.test(s) ? s : '';
+  return /^(?:https?:\/\/(?:[a-z0-9-]+\.)*(?:gtimg\.cn|qq\.com|qlogo\.cn|qpic\.cn)\/|data:image\/(?:png|jpeg|jpg|gif|webp|svg\+xml);base64,[A-Za-z0-9+/=]+$)/i.test(s) ? s : '';
 }
 
 // Playlist names from the backend carry a leading emoji (e.g. "❤️ 我喜欢"); strip it for the cleaner card UI.
@@ -2304,6 +2544,7 @@ function switchTab(tab) {
     ['mine', 'tabBtnMine', 'viewMine'],
     ['queue', 'tabBtnQueue', 'viewQueue'],
     ['toplist', 'tabBtnToplist', 'viewToplist'],
+    ['radio', 'tabBtnRadio', 'viewRadio'],
     ['search', 'tabBtnSearch', 'viewSearch'],
     ['account', 'tabBtnAccount', 'viewAccount']
   ]) {
@@ -2330,6 +2571,9 @@ function switchTab(tab) {
   }
   if (tab === 'mine') {
     loadMine(!myPlaylists.length);
+  }
+  if (tab === 'radio') {
+    loadRadioCatalog(true);
   }
   if (tab === 'queue') {
     const cur = document.querySelector('#queueList .song-row.playing');
@@ -2362,7 +2606,7 @@ function songRowHtml(t, i, listVarName) {
           <div class="row-title">${esc(t.title)}</div>
           <div class="row-sub">${t.vip ? '<span class="tag">VIP</span>' : ''}<span class="tx">${sub}</span></div>
         </div>
-        <div class="row-dur">${t.duration ? fmtTime(t.duration) : ''}</div>
+        <div class="row-dur${t.is_live ? ' live-tag' : ''}">${t.duration ? fmtTime(t.duration) : (t.is_live ? '直播' : '')}</div>
       </div>
     `;
 }
@@ -2440,7 +2684,8 @@ function paintProgress(el, dur) {
     lastTimeCur = tc;
     document.getElementById('timeCur').textContent = tc;
   }
-  const ratio = dur > 0 ? Math.min(1, Math.max(0, el / dur)) : 0;
+  const isLive = !!(state && state.track && state.track.is_live);
+  const ratio = isLive ? 1 : (dur > 0 ? Math.min(1, Math.max(0, el / dur)) : 0);
   const w = progTrackW || syncProgTrackW();
   const tf = 'scaleX(' + (seekDragging ? ratio.toFixed(4) : ratio.toFixed(3)) + ')';
   if (tf !== lastProgTf) {
@@ -2476,14 +2721,16 @@ function applyPlayingUi(playing) {
     syncEqState();
   }
   lastSongPlaying = playing;
-  const npStateKey = amb ? `amb:${amb.preset || ''}:${amb.layer || ''}` : (!state.track ? 'idle' : (playing ? 'playing' : 'paused'));
+  const isLiveSt = !!(state.track && state.track.is_live && !amb);
+  const npStateKey = amb ? `amb:${amb.preset || ''}:${amb.layer || ''}` : (!state.track ? 'idle' : (playing ? (isLiveSt ? 'live_on' : 'playing') : (isLiveSt ? 'live_paused' : 'paused')));
   if (window.__lastNpStateKey !== npStateKey) {
     window.__lastNpStateKey = npStateKey;
     const stTag = document.getElementById('npStateTag');
     const stTxt = document.getElementById('npStateTxt');
     if (stTag && stTxt) {
-      stTag.classList.toggle('playing', activeOut);
-      stTxt.textContent = amb ? '声景播放中' : (npStateKey === 'playing' ? '正在播放' : (npStateKey === 'paused' ? '已暂停' : '待播放'));
+      stTag.classList.toggle('playing', activeOut && !isLiveSt);
+      stTag.classList.toggle('live-on', activeOut && isLiveSt);
+      stTxt.textContent = amb ? '声景播放中' : (npStateKey === 'live_on' ? '实时直播中' : (npStateKey === 'live_paused' ? '直播已暂停' : (npStateKey === 'playing' ? '正在播放' : (npStateKey === 'paused' ? '已暂停' : '待播放'))));
     }
   }
   if (typeof syncMusicTimers === 'function') syncMusicTimers();
@@ -2606,9 +2853,11 @@ async function pollStatus(force = false, allowHidden = false) {
 
     applyPlayingUi(!!st.playing);
     const hasTrk = !!(st.track && !st.ambient);
+    const isLiveTrk = !!(hasTrk && st.track.is_live);
+    document.body.classList.toggle('live-radio', isLiveTrk);
     const el = hasTrk ? (st.elapsed || 0) : 0;
     const dur = hasTrk ? (st.duration || 0) : 0;
-    const tt = dur > 0 ? fmtTime(dur) : (hasTrk ? '--:--' : '00:00');
+    const tt = isLiveTrk ? '直播中' : (dur > 0 ? fmtTime(dur) : (hasTrk ? '--:--' : '00:00'));
     if (tt !== lastTimeTotal) {
       lastTimeTotal = tt;
       document.getElementById('timeTotal').textContent = tt;
@@ -2647,6 +2896,12 @@ async function pollStatus(force = false, allowHidden = false) {
 
     updateAccountUi(st.user_profile);
     renderSleep(st.sleep || null);
+    if (st.radio_audio_mode) syncRadioAudioModeUi(st.radio_audio_mode);
+    syncRadioActiveUi(st.track ? (st.track.radio_id || '') : '', !!st.playing);
+    if (st.open_ui_fresh && st.open_ui_tab && st.open_ui_seq && st.open_ui_seq !== window.__lastOpenUiTabSeq) {
+      window.__lastOpenUiTabSeq = st.open_ui_seq;
+      if (currentTab !== st.open_ui_tab) switchTab(st.open_ui_tab);
+    }
   } catch (e) {
     document.body.classList.add('disconnected');
     window.__lastNpStateKey = null;
@@ -2943,6 +3198,22 @@ function renderLyrics(lines, elapsed, mid) {
         : '正在播放主页「计时睡眠」里的声景，点选右侧任意歌曲即可播歌';
       const bottomActHtml = `<div class="amb-stage-actions">${hasSaved ? `<button type="button" class="amb-stage-btn resume" onclick="resumeSavedTrack()">续播《${esc(state.track.title)}》</button>` : ''}<button type="button" class="amb-stage-btn off" onclick="stopMusicAmbient()">停止声景</button></div>`;
       document.getElementById('lyricsBox').innerHTML = `<div class="lrc-line active placeholder" style="font-size:26px;padding:10px 6px">${esc(state.ambient.name || '自然声景')}</div><div class="lrc-line placeholder" style="font-size:17.5px;margin-top:4px;padding:4px 6px">${subAmb}</div>${bottomActHtml}`;
+    }
+    return;
+  }
+  if (state && state.track && state.track.is_live) {
+    const liveHead = `${state.playing ? '正在直播' : '直播已暂停'} · ${state.track.title || '网络电台'}`;
+    const liveSub = state.track.desc || (lines && lines[1] && lines[1].text) || state.track.artist || '实时广播伴听 · 可喊“小麦”随时换台';
+    const liveMid = `live:${state.track.radio_id || state.track.title || ''}:${state.playing ? 1 : 0}:${liveSub}`;
+    if (renderedMid !== liveMid) {
+      renderedLrcCount = 2;
+      renderedMid = liveMid;
+      lastActiveLrcIdx = 0;
+      lrcEls = [];
+      cancelLrcScroll();
+      document.getElementById('lyricsBox').innerHTML =
+        `<div class="lrc-line active placeholder" style="font-size:24px;padding:10px 6px">${esc(liveHead)}</div>` +
+        `<div class="lrc-line placeholder" style="font-size:16px;margin-top:6px;padding:4px 6px">${esc(liveSub)}</div>`;
     }
     return;
   }
@@ -3626,8 +3897,385 @@ function favHud(txt, on = true) {
   h.classList.add('show');
   clearTimeout(favHudT); favHudT = setTimeout(() => h.classList.remove('show'), 1800);
 }
+let radioStations = [], radioFavSet = new Set(), selectedRadioCat = 'all', activeRadioId = '', radioLoading = false, radioPlayBusy = false;
+let pickerRadioId = '', pickerEpisodes = [], pickerResume = null, pickerLoading = false, pickerDesc = false;
+let radioAudioMode = 'hifi';
+const RADIO_AUDIO_LABELS = { hifi: '臻享增强', voice: '清澈人声', raw: '原声直通' };
+const RADIO_AUDIO_ORDER = ['hifi', 'voice', 'raw'];
+
+function syncRadioAudioModeUi(mode) {
+  if (!mode || !RADIO_AUDIO_LABELS[mode]) return;
+  radioAudioMode = mode;
+  const b = document.getElementById('btnRadioDsp');
+  if (b) {
+    b.textContent = RADIO_AUDIO_LABELS[mode];
+    b.classList.toggle('raw', mode === 'raw');
+  }
+  document.querySelectorAll('#radioQualSeg .qual-btn').forEach(el => el.classList.toggle('active', el.dataset.rq === mode));
+}
+
+async function setRadioAudioMode(mode) {
+  if (!RADIO_AUDIO_LABELS[mode]) return;
+  syncRadioAudioModeUi(mode);
+  try {
+    const r = await api('/api/music/radio/audio_mode', { mode }, 6000);
+    if (r && r.ok) {
+      syncRadioAudioModeUi(r.radio_audio_mode || mode);
+      const desc = mode === 'hifi' ? '电台音质：臻享增强（全频母带调音+稳压）' : (mode === 'voice' ? '电台音质：清澈人声（强化评书吐字）' : '电台音质：原声直通');
+      favHud(desc, mode !== 'raw');
+      await pollStatus(true);
+    }
+  } catch (e) {}
+}
+
+function cycleRadioAudioMode() {
+  const nxt = RADIO_AUDIO_ORDER[(RADIO_AUDIO_ORDER.indexOf(radioAudioMode) + 1) % RADIO_AUDIO_ORDER.length];
+  setRadioAudioMode(nxt);
+}
+
+const RADIO_CAT_HERO = {
+  all: ['精选电台 · 故事评书', '点卡片自动续播 · 点“选集”可挑集'],
+  fm: ['全国与本地综合广播', '央广、相声台、省市交通与粤港澳资讯频率'],
+  music_fm: ['高音质音乐电台', '全线 AAC 立体声高清流 · 流行、怀旧、粤语、古典爵士伴听'],
+  kids: ['少儿故事 · 英语名著', '米小圈、牛津树、古诗童话 · 自动记忆集数'],
+  crosstalk: ['相声与名家评书', '德云社、单口相声、名家评书 · 支持选集连播'],
+  fav: ['收藏的电台与频道', '常听的广播与故事评书频道都在这里']
+};
+
+async function loadRadioCatalog(force = false) {
+  if (radioLoading && !force) return;
+  radioLoading = true;
+  try {
+    const r = await api('/api/music/radio', null, 6000);
+    if (r && r.ok && Array.isArray(r.stations)) {
+      radioStations = r.stations;
+      radioFavSet = new Set(Array.isArray(r.favs) ? r.favs : r.stations.filter(s => s.fav).map(s => s.id));
+      if (typeof r.active_radio_id === 'string') activeRadioId = r.active_radio_id;
+      if (r.radio_audio_mode) syncRadioAudioModeUi(r.radio_audio_mode);
+      syncRadioFavChip();
+      if (!pickerRadioId) renderRadioView();
+      renderFav();
+    }
+  } catch (e) {} finally {
+    radioLoading = false;
+  }
+}
+
+function syncRadioFavChip() {
+  const fc = document.getElementById('radioFavChip');
+  if (fc) fc.textContent = radioFavSet.size > 0 ? `收藏 · ${radioFavSet.size}` : '收藏电台';
+}
+
+function selectRadioCat(cat, btnEl) {
+  selectedRadioCat = cat;
+  document.querySelectorAll('#radioChips .chip').forEach(c => c.classList.toggle('active', c.dataset.rcat === cat));
+  if (pickerRadioId) closeRadioEpisodes(false);
+  const meta = RADIO_CAT_HERO[cat] || RADIO_CAT_HERO.all;
+  document.getElementById('radioHeroTitle').textContent = meta[0];
+  document.getElementById('radioHeroSub').textContent = meta[1];
+  renderRadioView();
+}
+
+function fmtResumeShort(res) {
+  if (!res) return '';
+  const idx = Number(res.idx) || 0;
+  const sec = Number(res.sec) || 0;
+  if (idx <= 0 && sec < 3) return '';
+  return `续播 第${idx + 1}集 ${fmtTime(sec)}`;
+}
+
+function renderRecentStrip() {
+  const wrap = document.getElementById('radioRecentWrap');
+  const box = document.getElementById('radioRecentList');
+  if (!wrap || !box) return;
+  if (pickerRadioId || (selectedRadioCat !== 'all' && selectedRadioCat !== 'kids' && selectedRadioCat !== 'crosstalk')) {
+    wrap.classList.remove('show');
+    return;
+  }
+  const recents = radioStations
+    .filter(s => s.kind === 'channel' && (selectedRadioCat === 'all' || s.cat === selectedRadioCat) && fmtResumeShort(s.resume))
+    .sort((a, b) => ((b.resume && b.resume.updated) || 0) - ((a.resume && a.resume.updated) || 0))
+    .slice(0, 2);
+  if (!recents.length) {
+    wrap.classList.remove('show');
+    return;
+  }
+  wrap.classList.add('show');
+  box.innerHTML = recents.map(s => {
+    const pos = fmtResumeShort(s.resume).replace('续播 ', '');
+    return `<div class="rr-item" onclick="playRadioStation('${esc(s.id)}', false)">
+      <svg class="i rr-play"><use href="#i-play"/></svg>
+      <div class="rr-info"><span class="rr-title">${esc(s.title)}</span><span class="rr-pos">${esc(pos)}</span></div>
+      <button class="rr-del" type="button" aria-label="清除续播记录" onclick="event.stopPropagation(); clearRadioProgress('${esc(s.id)}')">×</button>
+    </div>`;
+  }).join('');
+}
+
+async function clearRadioProgress(sid) {
+  try {
+    const r = await api('/api/music/radio/progress', { id: sid, clear: true }, 5000);
+    if (r && r.ok) {
+      const st = radioStations.find(x => x.id === sid);
+      if (st) st.resume = null;
+      if (pickerRadioId === sid) { pickerResume = null; renderPickerEpisodes(); }
+      else renderRadioView();
+      favHud('已重置该频道收听进度', false);
+    }
+  } catch (e) {}
+}
+
+function renderRadioView() {
+  const grid = document.getElementById('radioGrid');
+  if (!grid || pickerRadioId) return;
+  renderRecentStrip();
+  const list = selectedRadioCat === 'all'
+    ? radioStations
+    : (selectedRadioCat === 'fav' ? radioStations.filter(s => radioFavSet.has(s.id)) : radioStations.filter(s => s.cat === selectedRadioCat));
+  const curSt = radioStations.find(s => s.id === activeRadioId);
+  const shufLbl = document.getElementById('radioShufLbl');
+  if (shufLbl) shufLbl.textContent = (curSt && curSt.kind === 'channel') ? '换一批节目' : '随机听个台';
+
+  if (!list.length) {
+    grid.innerHTML = `<div class="list-empty" style="grid-column:1/-1;padding:64px 12px">${selectedRadioCat === 'fav' ? '还没有收藏电台，点电台卡片右侧 ♡ 即可收藏常听频道' : '正在加载电台列表…'}</div>`;
+    return;
+  }
+  grid.innerHTML = list.map(s => {
+    const isAct = s.id === activeRadioId && !!(state && state.track && !state.ambient);
+    const isFav = radioFavSet.has(s.id);
+    const isCh = s.kind === 'channel';
+    const cover = safeImg(s.cover || '') || DEFAULT_COVER;
+    const pillHtml = s.kind === 'live' ? '<span class="rc-pill live">直播</span>' : '';
+    const resTxt = isCh ? fmtResumeShort(s.resume) : '';
+    const subHtml = resTxt
+      ? `<div class="rc-sub resumed">${esc(resTxt)}</div>`
+      : `<div class="rc-sub">${esc(s.sub)}</div>`;
+    const epBtnHtml = isCh
+      ? `<button class="rc-ep-btn" type="button" onclick="event.stopPropagation(); openRadioEpisodes('${esc(s.id)}')">选集</button>`
+      : '';
+    return `<div class="radio-card${isAct ? ' playing' : ''}" data-rid="${esc(s.id)}" onclick="playRadioStation('${esc(s.id)}', false)">
+      <div class="rc-cover-wrap">
+        <img class="rc-cover" src="${esc(cover)}" alt="" decoding="async">
+        <div class="rc-eq">${EQ_HTML}</div>
+      </div>
+      <div class="rc-body">
+        <div class="rc-top"><span class="rc-title">${esc(s.title)}</span>${pillHtml}</div>
+        ${subHtml}
+      </div>
+      <div class="rc-acts${isCh ? ' has-ep' : ''}">
+        <button class="rc-fav${isFav ? ' on' : ''}" type="button" aria-label="收藏电台" onclick="event.stopPropagation(); toggleRadioStationFav('${esc(s.id)}')">
+          <svg class="i${isFav ? ' f' : ''}"><use href="#i-heart"/></svg>
+        </button>
+        ${epBtnHtml}
+      </div>
+    </div>`;
+  }).join('');
+  syncEqState();
+}
+
+async function openRadioEpisodes(sid) {
+  const st = radioStations.find(s => s.id === sid);
+  pickerRadioId = sid;
+  pickerEpisodes = [];
+  pickerDesc = false;
+  pickerResume = st ? st.resume : null;
+  document.getElementById('radioMainHero').style.display = 'none';
+  document.getElementById('radioRecentWrap').classList.remove('show');
+  document.getElementById('radioGrid').style.display = 'none';
+  const epBox = document.getElementById('radioEpBox');
+  epBox.classList.add('show');
+  document.getElementById('repTitle').textContent = st ? st.title : '节目选集';
+  document.getElementById('repSub').textContent = '正在加载分集列表…';
+  document.getElementById('repBtnSort').textContent = '正序 ↑';
+  document.getElementById('radioEpList').innerHTML = '<div class="list-empty">正在加载节目单…</div>';
+  pickerLoading = true;
+  try {
+    const r = await api('/api/music/radio/episodes?id=' + encodeURIComponent(sid), null, 12000);
+    if (pickerRadioId !== sid) return;
+    if (r && r.ok && Array.isArray(r.episodes)) {
+      pickerEpisodes = r.episodes;
+      pickerResume = r.resume || null;
+      if (st) st.resume = pickerResume;
+      renderPickerEpisodes(true);
+    } else {
+      document.getElementById('repSub').textContent = (r && r.error) || '加载失败';
+      document.getElementById('radioEpList').innerHTML = '<div class="list-empty">暂时未能获取到分集列表，请稍后重试</div>';
+    }
+  } catch (e) {
+    if (pickerRadioId === sid) {
+      document.getElementById('repSub').textContent = '网络请求超时';
+      document.getElementById('radioEpList').innerHTML = '<div class="list-empty">网络较慢，请返回再试一次</div>';
+    }
+  } finally {
+    pickerLoading = false;
+  }
+}
+
+function togglePickerSort() {
+  if (!pickerRadioId || !pickerEpisodes.length) return;
+  pickerDesc = !pickerDesc;
+  renderPickerEpisodes(false);
+}
+
+function renderPickerEpisodes(autoScroll = false) {
+  if (!pickerRadioId) return;
+  const eps = pickerEpisodes;
+  const res = pickerResume;
+  const resShort = fmtResumeShort(res);
+  document.getElementById('repSub').textContent = `共 ${eps.length} 集${resShort ? ' · 上次：' + resShort.replace('续播 ', '') : ' · 点任意一集直接连播'}`;
+  document.getElementById('repResumeLbl').textContent = resShort ? '续播上次' : '播放全部';
+  document.getElementById('repBtnSort').textContent = pickerDesc ? '倒序 ↓' : '正序 ↑';
+
+  const box = document.getElementById('radioEpList');
+  if (!eps.length) {
+    box.innerHTML = '<div class="list-empty">暂无分集</div>';
+    return;
+  }
+  const curMid = (state.track && state.track.mid) || '';
+  const curRid = (state.track && state.track.radio_id) || '';
+  const indices = eps.map((_, idx) => idx);
+  if (pickerDesc) indices.reverse();
+  box.innerHTML = indices.map(origIdx => {
+    const t = eps[origIdx];
+    const isCur = !!(curRid === pickerRadioId && ((curMid && t.mid === curMid) || (!curMid && state.index === origIdx)));
+    const isRes = !isCur && !!(res && ((res.mid && t.mid === res.mid) || (!res.mid && res.idx === origIdx)) && (res.idx > 0 || res.sec >= 3));
+    const thumbUrl = safeImg(t.thumb || t.cover || '') || DEFAULT_COVER;
+    const resPill = isRes ? `<span class="rep-mark">上次 ${fmtTime(res.sec || 0)}</span>` : '';
+    return `<div class="song-row${isCur ? ' playing' : ''}${isRes ? ' bookmarked' : ''}" data-mid="${esc(t.mid || '')}" data-idx="${origIdx}" onclick="playRadioEpisode('${esc(pickerRadioId)}', ${origIdx})">
+      <div class="row-idx">${isCur ? EQ_HTML : origIdx + 1}</div>
+      <img class="row-thumb" src="${esc(thumbUrl)}" loading="lazy" decoding="async" onerror="this.onerror=null;this.src=DEFAULT_COVER">
+      <div class="row-info">
+        <div class="row-title">${resPill}${esc(t.title)}</div>
+        <div class="row-sub"><span class="tx">${esc(t.artist || '')}</span></div>
+      </div>
+      <div class="row-dur">${t.duration ? fmtTime(t.duration) : ''}</div>
+    </div>`;
+  }).join('');
+  syncEqState();
+  if (autoScroll) {
+    requestAnimationFrame(() => {
+      const target = box.querySelector('.song-row.playing') || box.querySelector('.song-row.bookmarked');
+      if (target) target.scrollIntoView({ block: 'center' });
+      else box.scrollTop = 0;
+    });
+  }
+}
+
+function closeRadioEpisodes(reload = true) {
+  pickerRadioId = '';
+  pickerEpisodes = [];
+  pickerDesc = false;
+  document.getElementById('radioEpBox').classList.remove('show');
+  document.getElementById('radioMainHero').style.display = '';
+  document.getElementById('radioGrid').style.display = '';
+  if (reload) loadRadioCatalog(true);
+  else renderRadioView();
+}
+
+function playRadioEpisode(sid, idx) {
+  playRadioStation(sid, false, idx, false);
+}
+
+function playPickerChannelResume() {
+  if (!pickerRadioId) return;
+  playRadioStation(pickerRadioId, false, null, false);
+}
+
+function playPickerChannelRestart() {
+  if (!pickerRadioId) return;
+  playRadioStation(pickerRadioId, false, 0, true);
+}
+
+function syncRadioActiveUi(nextRadioId, isPlaying) {
+  const rid = nextRadioId || '';
+  const prevId = activeRadioId;
+  const changed = rid !== prevId;
+  activeRadioId = rid;
+  if (pickerRadioId && pickerEpisodes.length) {
+    if (changed) renderPickerEpisodes(false);
+  } else if (changed) {
+    const prevSt = prevId ? radioStations.find(s => s.id === prevId) : null;
+    if (currentTab === 'radio' && prevSt && prevSt.kind === 'channel') loadRadioCatalog(true);
+    else if (currentTab === 'radio' && radioStations.length) renderRadioView();
+    else {
+      document.querySelectorAll('#radioGrid .radio-card').forEach(c => c.classList.toggle('playing', c.dataset.rid === rid && !!rid));
+    }
+  }
+  if (changed) renderFav();
+}
+
+async function playRadioStation(sid, shuffle = false, trackIndex = null, restart = false) {
+  if (radioPlayBusy) return;
+  radioPlayBusy = true;
+  const st = radioStations.find(x => x.id === sid);
+  if (st) {
+    activeRadioId = sid;
+    if (currentTab === 'radio' && !pickerRadioId) renderRadioView();
+    favHud(shuffle ? `正在换一批「${st.title}」…` : `正在连接「${st.title}」…`, true);
+  }
+  const payload = { id: sid, shuffle: !!shuffle, restart: !!restart };
+  if (typeof trackIndex === 'number') payload.track_index = trackIndex;
+  try {
+    const r = await api('/api/music/radio/play', payload, 15000);
+    if (r && r.ok) {
+      await pollStatus(true);
+      if (pickerRadioId === sid) renderPickerEpisodes(false);
+      else if (currentTab === 'radio') loadRadioCatalog(true);
+      if (r.message) favHud(r.message, true);
+    } else {
+      favHud((r && r.error) || '电台连接失败，请换一个试试', false);
+    }
+  } catch (e) {
+    favHud('电台连接超时，请稍后重试', false);
+  } finally {
+    radioPlayBusy = false;
+  }
+}
+
+function shuffleActiveOrRandomRadio() {
+  const curSt = radioStations.find(s => s.id === activeRadioId);
+  if (curSt && curSt.kind === 'channel' && (selectedRadioCat === 'all' || selectedRadioCat === curSt.cat)) {
+    playRadioStation(curSt.id, true);
+    return;
+  }
+  const pool = selectedRadioCat === 'all'
+    ? radioStations
+    : (selectedRadioCat === 'fav'
+        ? (radioFavSet.size ? radioStations.filter(s => radioFavSet.has(s.id)) : radioStations)
+        : radioStations.filter(s => s.cat === selectedRadioCat));
+  if (!pool.length) return;
+  const others = pool.filter(s => s.id !== activeRadioId);
+  const pick = (others.length ? others : pool)[Math.floor(Math.random() * (others.length || pool.length))];
+  playRadioStation(pick.id, pick.kind === 'channel');
+}
+
+async function toggleRadioStationFav(sid) {
+  if (!radioStations.length) await loadRadioCatalog(true);
+  const want = !radioFavSet.has(sid);
+  try {
+    const r = await api('/api/music/radio/fav', { id: sid, fav: want }, 6000);
+    if (r && r.ok) {
+      if (r.fav) radioFavSet.add(sid);
+      else radioFavSet.delete(sid);
+      syncRadioFavChip();
+      favHud(r.message || (r.fav ? '已收藏频道' : '已取消收藏'), !!r.fav);
+      if (currentTab === 'radio' && !pickerRadioId) renderRadioView();
+      renderFav();
+    }
+  } catch (e) {}
+}
+
 function renderFav() {
   const b = document.getElementById('btnLikeList'), t = state && state.track;
+  const isRadio = !!(t && t.radio_id);
+  if (isRadio) {
+    const rLiked = radioFavSet.has(t.radio_id);
+    b.classList.toggle('liked', rLiked);
+    b.classList.remove('na');
+    b.classList.toggle('busy', favBusy);
+    document.getElementById('favIco').classList.toggle('f', rLiked);
+    document.getElementById('favLbl').textContent = rLiked ? '已收藏' : '收藏';
+    return;
+  }
   const qq = !!(t && t.mid && !t.is_local);
   b.classList.toggle('liked', qq && favLiked === true);
   b.classList.toggle('na', !qq);
@@ -3637,6 +4285,11 @@ function renderFav() {
 }
 async function syncFav() {   // after each status poll: the playing song's state, once per song
   const t = state && state.track;
+  if (t && t.radio_id) {
+    if (!radioStations.length && !radioLoading) loadRadioCatalog(false);
+    renderFav();
+    return;
+  }
   const mid = t && t.mid && !t.is_local ? t.mid : '';
   if (mid === favMid) { renderFav(); return; }
   favMid = mid; favLiked = null; renderFav();
@@ -3649,6 +4302,10 @@ async function syncFav() {   // after each status poll: the playing song's state
 }
 async function toggleFav() {
   const t = state && state.track;
+  if (t && t.radio_id) {
+    await toggleRadioStationFav(t.radio_id);
+    return;
+  }
   if (!t || !t.mid || t.is_local) { favHud('先播放一首 QQ 音乐的歌', false); return; }
   if (favBusy) return;
   const mid = t.mid, want = favLiked !== true;
@@ -3677,7 +4334,15 @@ async function toggleFav() {
   b.addEventListener('pointerdown', e => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     favLong = false; clearTimeout(favPressT);
-    favPressT = setTimeout(() => { favLong = true; openFavPlaylist(); }, 650);
+    favPressT = setTimeout(() => {
+      favLong = true;
+      if (state && state.track && state.track.radio_id) {
+        if (currentTab !== 'radio') switchTab('radio');
+        selectRadioCat('fav');
+      } else {
+        openFavPlaylist();
+      }
+    }, 650);
   });
   for (const ev of ['pointerup', 'pointercancel', 'pointerleave']) b.addEventListener(ev, () => clearTimeout(favPressT));
   b.addEventListener('click', () => { if (favLong) { favLong = false; return; } toggleFav(); });
@@ -3714,7 +4379,10 @@ function fmtSleep(s) {
 }
 function renderSleep(s) {
   const hasAmb = !!(state && state.ambient);
-  const sig = `${s ? `${s.mode}:${s.remaining}:${s.tracks_left}` : 'none'}:${hasAmb ? 1 : 0}`;
+  const isLive = !!(state && state.track && state.track.is_live && !hasAmb);
+  const isRadio = !!(state && state.track && state.track.radio_id && !hasAmb);
+  const noTracks = hasAmb || isLive;
+  const sig = `${s ? `${s.mode}:${s.remaining}:${s.tracks_left}` : 'none'}:${hasAmb ? 1 : 0}:${isLive ? 1 : 0}:${isRadio ? 1 : 0}`;
   if (sig === lastSleepSig) return;
   lastSleepSig = sig;
   const btn = document.getElementById('btnSleep');
@@ -3724,19 +4392,19 @@ function renderSleep(s) {
   cancelBtn.style.display = s ? '' : 'none';
   cancelBtn.style.visibility = '';
   const titleEl = document.querySelector('#sleepMenu .slp-title');
-  if (titleEl) titleEl.textContent = hasAmb ? '定时关闭声景' : '定时关闭音乐';
+  if (titleEl) titleEl.textContent = hasAmb ? '定时关闭声景' : (isRadio ? '定时关闭电台' : '定时关闭音乐');
   let visOptCount = 0;
   document.querySelectorAll('#sleepMenu .slp-opt[data-m], #sleepMenu .slp-opt[data-t]').forEach(b => {
-    if (b.dataset.t) b.style.display = hasAmb ? 'none' : '';
-    else if (b.dataset.m === '10') b.style.display = (hasAmb || (s && s.mode === 'time' && s.total === 10)) ? '' : 'none';
+    if (b.dataset.t) b.style.display = noTracks ? 'none' : '';
+    else if (b.dataset.m === '10') b.style.display = (noTracks || (s && s.mode === 'time' && s.total === 10)) ? '' : 'none';
     if (b.style.display !== 'none') visOptCount++;
-    const on = !!(s && ((s.mode === 'time' && +b.dataset.m === s.total) || (!hasAmb && s.mode === 'tracks' && +b.dataset.t === s.tracks_left)));
+    const on = !!(s && ((s.mode === 'time' && +b.dataset.m === s.total) || (!noTracks && s.mode === 'tracks' && +b.dataset.t === s.tracks_left)));
     b.classList.toggle('active', on);
   });
   cancelBtn.classList.toggle('wide', !!(s && visOptCount % 3 === 0));
   if (!document.getElementById('sleepSub').classList.contains('error')) document.getElementById('sleepSub').textContent = s
     ? (s.mode === 'time' ? `将在 ${fmtSleep(s)} 后停止，可重新选择或取消` : `将在${s.tracks_left <= 1 ? '这首播完' : `再播 ${s.tracks_left} 首`}后停止`)
-    : (hasAmb ? '到点前 20 秒声景会慢慢变小，然后自动停止' : '到点前 20 秒音乐会慢慢变小，然后暂停（进度保留）');
+    : (hasAmb ? '到点前 20 秒声景会慢慢变小，然后自动停止' : (isLive ? '到点前 20 秒广播会慢慢变小，然后自动暂停' : '到点前 20 秒音乐会慢慢变小，然后暂停（进度保留）'));
 }
 function openSleepMenu() {
   document.getElementById('sleepSub').classList.remove('error');
@@ -3866,7 +4534,7 @@ function tickMusicInterp() {
   if (!isPageActive() || !progBase.playing || seekDragging) return;
   const el = progBase.dur > 0 ? Math.min(progBase.dur, progBase.el + (monoNow() - progBase.at) / 1000) : progBase.el + (monoNow() - progBase.at) / 1000;
   paintProgress(el, progBase.dur);
-  if (state.track && state.lyrics && state.lyrics.length) {
+  if (state.track && !state.track.is_live && state.lyrics && state.lyrics.length) {
     const curKey = state.track.mid || (state.track.file ? `f:${state.track.file}` : (state.track.title ? `t:${state.track.title}` : ''));
     renderLyrics(state.lyrics, el, `${clientLSeq}:${curKey}`);
   }
@@ -3929,6 +4597,10 @@ window.addEventListener('message', e => {
     }
     if (e.data.cmd === 'openFav') {
       openFavPlaylist();
+    } else if (e.data.cmd === 'openRadio') {
+      if (currentTab !== 'radio') switchTab('radio');
+    } else if (e.data.cmd === 'openAccount') {
+      if (currentTab !== 'account') switchTab('account');
     }
   }
 });

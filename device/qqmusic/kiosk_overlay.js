@@ -15,15 +15,23 @@
   let lastVoiceBusyAt = 0;
   let pendingOpenTimer = 0;
   let wantOpenOnWake = false;
+  let pendingSubCmd = '';
 
-  function openQqMusic(retries = 0) {
+  function tabToSubCmd(tab) {
+    return tab === 'radio' ? 'openRadio' : (tab === 'account' ? 'openAccount' : '');
+  }
+
+  function openQqMusic(retries = 0, subCmd = '') {
     clearTimeout(pendingOpenTimer);
     pendingOpenTimer = 0;
     wantOpenOnWake = false;
+    const cmd = subCmd || pendingSubCmd || '';
     if (typeof window.__tsOpenSub === 'function') {
-      window.__tsOpenSub(API + '/');
+      pendingSubCmd = '';
+      window.__tsOpenSub(API + '/', cmd);
     } else if (retries < 25) {
-      pendingOpenTimer = setTimeout(() => openQqMusic(retries + 1), 200);
+      pendingSubCmd = cmd;
+      pendingOpenTimer = setTimeout(() => openQqMusic(retries + 1, cmd), 200);
     }
   }
 
@@ -60,7 +68,7 @@
         lastBootId = st.boot_id || lastBootId;
         lastSeq = seq;
         if (((restarted && seq > 0 && fresh) || (st.open_ui_fresh === true && seq > 0 && lastVoiceBusyAt > 0)) && !st.alarm_ringing && !document.body.classList.contains('ringing')) {
-          openQqMusic();
+          openQqMusic(0, tabToSubCmd(st.open_ui_tab));
         }
       } else {
         lastBootId = st.boot_id || lastBootId;
@@ -68,7 +76,7 @@
           const increased = seq > lastSeq;
           lastSeq = seq;
           if (increased && fresh && !st.alarm_ringing && !document.body.classList.contains('ringing')) {
-            openQqMusic();
+            openQqMusic(0, tabToSubCmd(st.open_ui_tab));
           }
         }
       }

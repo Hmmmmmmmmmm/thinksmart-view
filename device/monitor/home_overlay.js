@@ -120,7 +120,10 @@
   html.ts-light #tsMsgCard .tm-h{color:#84510a}
   html.ts-light #tsMsgCard button{background:#a26008;color:#faf8f4}
   html.ts-light #tsVoicePill{background:#f6f2ea;border-color:#d6cdbf;color:#18191b;box-shadow:0 6px 16px rgba(28,24,18,.16)}
-  html.ts-light #tsVoicePill i{background:#0f6d63}
+  html.ts-light #tsVoicePill i{background:#216e37}
+  html.ts-light #tsVoicePill[data-st="connecting"] i{background:#2b65bf}
+  html.ts-light #tsVoicePill[data-st="thinking"] i{background:#a26008}
+  html.ts-light #tsVoicePill[data-st="speaking"] i{background:#3b4c77}
   `;
   document.head.appendChild(style);
 
