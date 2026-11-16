@@ -369,30 +369,34 @@ def remind_due(at=None, day=None, time_s=None, in_minutes=None, now=None):
 
 
 def weather_credentials(path=HUB_CONFIG):
-    """api_host / api_key of plugins.get_weather in the hub's private YAML (no YAML lib needed)."""
-    try:
-        text = _read_regular_bytes(path, 1024 * 1024).decode('utf-8')
-    except (OSError, UnicodeDecodeError):
-        return None, None
+    """api_host / api_key from QWEATHER_API_HOST / QWEATHER_API_KEY env or plugins.get_weather in hub YAML."""
     host = key = None
-    base = None
-    for line in text.splitlines():
-        stripped = line.strip()
-        if not stripped or stripped.startswith('#'):
-            continue
-        indent = len(line) - len(line.lstrip(' '))
-        if base is None:
-            if re.match(r'^get_weather\s*:\s*(#.*)?$', stripped):
-                base = indent
-            continue
-        if indent <= base:
-            break
-        m = re.match(r'^(api_host|api_key)\s*:\s*["\']?([^"\'#\s]+)', stripped)
-        if m:
-            if m.group(1) == 'api_host':
-                host = m.group(2)
-            else:
-                key = m.group(2)
+    if path == HUB_CONFIG:
+        host = (os.environ.get('QWEATHER_API_HOST') or '').strip() or None
+        key = (os.environ.get('QWEATHER_API_KEY') or '').strip() or None
+    if not (host and key):
+        try:
+            text = _read_regular_bytes(path, 1024 * 1024).decode('utf-8')
+        except (OSError, UnicodeDecodeError):
+            text = ''
+        base = None
+        for line in text.splitlines():
+            stripped = line.strip()
+            if not stripped or stripped.startswith('#'):
+                continue
+            indent = len(line) - len(line.lstrip(' '))
+            if base is None:
+                if re.match(r'^get_weather\s*:\s*(#.*)?$', stripped):
+                    base = indent
+                continue
+            if indent <= base:
+                break
+            m = re.match(r'^(api_host|api_key)\s*:\s*["\']?([^"\'#\s]+)', stripped)
+            if m:
+                if m.group(1) == 'api_host' and not host:
+                    host = m.group(2)
+                elif m.group(1) == 'api_key' and not key:
+                    key = m.group(2)
     if host:
         host = host.lower().removeprefix('https://').removeprefix('http://').strip('/')
         if not QW_HOST_RE.fullmatch(host):

@@ -32,8 +32,11 @@ import urllib.request
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-SECRET = bytes.fromhex(Path(os.path.expanduser("~/.config/study-vision/secret")).read_text().strip())
-LLM = os.environ.get("STUDY_VISION_LLM", "http://127.0.0.1:8083")
+SECRET_FILE = os.environ.get("STUDY_VISION_SECRET_FILE", os.path.expanduser("~/.config/study-vision/secret"))
+SECRET = bytes.fromhex(Path(SECRET_FILE).read_text().strip())
+LLM = os.environ.get("STUDY_VISION_LLM", "http://127.0.0.1:8083").rstrip("/")
+LLM_MODEL = os.environ.get("STUDY_VISION_MODEL", "qwen3-vl-8b").strip() or "qwen3-vl-8b"
+LLM_API_KEY = os.environ.get("STUDY_VISION_API_KEY", "").strip()
 PORT = int(os.environ.get("STUDY_VISION_PORT", "8084"))
 MAX_BODY = 8 * 1024 * 1024
 MAX_IMAGES = 4          # a check sends a short burst of frames (3, 4 s apart) in time order
@@ -147,22 +150,39 @@ def upright(image_b64, rotate):
         path = os.path.join(d, "f.jpg")
         with open(path, "wb") as f:
             f.write(raw)
-        subprocess.run(["/usr/bin/sips", "-r", str(rotate), path], capture_output=True, timeout=10, check=True)
-        with open(path, "rb") as f:
+        if os.path.exists("/usr/bin/sips"):
+            subprocess.run(["/usr/bin/sips", "-r", str(rotate), path], capture_output=True, timeout=10, check=True)
+            out_path = path
+        else:
+            out_path = os.path.join(d, "r.jpg")
+            vf = {90: "transpose=1", 180: "transpose=2,transpose=2", 270: "transpose=2"}[rotate]
+            subprocess.run(["ffmpeg", "-nostdin", "-y", "-loglevel", "error", "-i", path, "-vf", vf, "-q:v", "3", out_path],
+                           capture_output=True, timeout=10, check=True)
+        with open(out_path, "rb") as f:
             return base64.b64encode(f.read()).decode()
 
 
 # ---- model call ------------------------------------------------------------------------
+def _chat_completions_url(base: str) -> str:
+    if base.endswith("/chat/completions"):
+        return base
+    if base.endswith(("/v1", "/v3", "/v4")):
+        return base + "/chat/completions"
+    return base + "/v1/chat/completions"
+
+
 def ask_model(prompt, images_b64, max_tokens):
     parts = [{"type": "image_url", "image_url": {"url": "data:image/jpeg;base64," + b}} for b in images_b64]
     body = {
-        "model": "qwen3-vl-8b",
+        "model": LLM_MODEL,
         "temperature": 0.1,
         "max_tokens": max(16, min(int(max_tokens), 512)),
         "messages": [{"role": "user", "content": parts + [{"type": "text", "text": prompt}]}],
     }
-    req = urllib.request.Request(LLM + "/v1/chat/completions", data=json.dumps(body).encode(),
-                                 headers={"Content-Type": "application/json"})
+    hdrs = {"Content-Type": "application/json", "User-Agent": "thinksmart-study-vision/1.0"}
+    if LLM_API_KEY:
+        hdrs["Authorization"] = f"Bearer {LLM_API_KEY}"
+    req = urllib.request.Request(_chat_completions_url(LLM), data=json.dumps(body).encode(), headers=hdrs)
     if not _model_lock.acquire(timeout=0.5):
         raise ModelBusy('another check is still processing')
     try:

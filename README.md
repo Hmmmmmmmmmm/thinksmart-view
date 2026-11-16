@@ -114,6 +114,8 @@ thinksmart-view/
 
 ### 前置必读：刷机顺序与小智底座依赖关系
 
+> **安装后配什么 Key、选什么大模型？** 请直接参阅配套手册 👉 **[《安装后用户自备配置清单与大模型选型指南（含本地 vs 云端方案）》](docs/USER_GUIDE.md)**。
+
 **是的，本套系统属于基于「小智语音底座」的二次安装全栈扩展套件**，完整安装只需两步，**不需要**在裸 Ubuntu 上自己从零手动编译安装小智：
 
 1. **第一步（刷入已内置小智的社区 Ubuntu 24.04 底包）**：
@@ -151,10 +153,12 @@ bash device/diagnose-wake.sh
 #### 个性化配置（推荐使用 systemd drop-in，升级不丢失）
 
 为避免后续 `git pull && sudo bash device/install.sh` 覆盖您的私有参数，建议通过 `local.conf` 配置环境变量：
-- **天气城市与和风 API Key**：新建 `/etc/systemd/system/thinksmart-home.service.d/local.conf`：
+- **天气城市与和风 API Key**：新建 `/etc/systemd/system/thinksmart-home.service.d/local.conf`（完整申请与大模型选型见 [`docs/USER_GUIDE.md`](docs/USER_GUIDE.md)）：
   ```ini
   [Service]
-  Environment=WEATHER_DEFAULT_CITY=北京 WEATHER_EXTRA_CITIES=上海,深圳
+  Environment=QWEATHER_API_HOST=您的专属域名.re.qweatherapi.com
+  Environment=QWEATHER_API_KEY=您的和风天气API_KEY
+  Environment=WEATHER_DEFAULT_CITY=北京 WEATHER_EXTRA_CITIES=上海,广州,深圳
   ```
 - **Nezha 服务器探针看板**：新建 `/etc/systemd/system/thinksmart-monitor.service.d/local.conf` 设置 `Environment=NEZHA_HOST=your-nezha.example.com`，并参考 [`servers.example.json`](device/monitor/servers.example.json) 与 [`traffic.example.json`](device/monitor/traffic.example.json) 编辑 `/usr/local/share/thinksmart-monitor/{servers,traffic}.json`（`install.sh` 不会覆盖已存在的 `servers.json` / `traffic.json`）。
 - **自定义高品质助眠环境音（可选）**：系统内置离线 FFT 无缝声景合成兜底（开箱即用）；如需更高音质的真实自然录音循环，可将同名 `.flac` / `.m4a`（如 `rain.flac`、`waves.flac`）放入 `/home/ubuntu/.config/thinksmart-qqmusic/ambient/`。
