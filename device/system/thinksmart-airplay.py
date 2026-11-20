@@ -15,6 +15,7 @@ import hashlib
 import json
 import math
 import os
+import re
 import signal
 import socket
 import stat
@@ -33,6 +34,8 @@ INTERCOM_FLAG_PATH = RUNTIME_DIR / "intercom-call-active"
 BACKLIGHT_PATH = Path("/sys/class/backlight/backlight/brightness")
 AUTOROTATE_SO = "/usr/local/lib/libuxplay_autorotate.so"
 UXPLAY_BIN = "/usr/local/bin/uxplay" if Path("/usr/local/bin/uxplay").exists() else "/usr/bin/uxplay"
+CONTROL_ACCEPTED = re.compile(r"Accepted IPv[46] client on socket (\d+), port \d+")
+CONTROL_CLOSED = re.compile(r"Connection closed on socket (\d+)")
 
 
 def log(msg: str) -> None:
@@ -52,6 +55,17 @@ def _should_log_uxplay_line(line: str, last_meta: dict) -> bool:
             last_meta[mk] = s
             return True
     return True
+
+
+def _last_control_connection_closed(line: str, sockets: set[int]) -> bool:
+    if accepted := CONTROL_ACCEPTED.fullmatch(line):
+        sockets.add(int(accepted[1]))
+    if closed := CONTROL_CLOSED.fullmatch(line):
+        fd = int(closed[1])
+        if fd in sockets:
+            sockets.remove(fd)
+            return not sockets
+    return False
 
 
 def _read_regular_file(path: Path, max_bytes: int = 8192) -> str:
@@ -582,6 +596,7 @@ def stop_proc(proc: subprocess.Popen) -> None:
 def main() -> int:
     # Startup failsafe & multi-core IRQ/RPS/Weston tuning
     MIRROR_FLAG_PATH.unlink(missing_ok=True)
+    set_audio_active(False)
     set_webkit_paused(False)
     set_hardware_turbo(False)
 
@@ -680,12 +695,14 @@ def main() -> int:
             mirror_active = False
             audio_active = False
             last_meta = {}
+            control_sockets: set[int] = set()
 
             assert proc.stdout is not None
             for raw_line in proc.stdout:
                 line = raw_line.rstrip()
                 if _should_log_uxplay_line(line, last_meta):
                     print(line, flush=True)
+                last_control_closed = _last_control_connection_closed(line, control_sockets)
 
                 if INTERCOM_FLAG_PATH.exists() and (mirror_active or audio_active):
                     expected_restart = True
@@ -724,7 +741,8 @@ def main() -> int:
                     pause_conflicting_media()
 
                 if audio_active and (
-                    "raop_rtp_audio" in line and ("exiting" in line or "stopped" in line or "closed" in line)
+                    last_control_closed
+                    or "raop_rtp_audio" in line and ("exiting" in line or "stopped" in line or "closed" in line)
                     or "Open connections: 0" in line
                     or "lost connection with client" in line
                 ):
@@ -743,7 +761,8 @@ def main() -> int:
                     enter_mirror_turbo(proc.pid)
 
                 elif mirror_active and (
-                    "raop_rtp_mirror tcp socket was closed" in line
+                    last_control_closed
+                    or "raop_rtp_mirror tcp socket was closed" in line
                     or "raop_rtp_mirror tcp socket is closed" in line
                     or "raop_rtp_mirror exiting TCP thread" in line
                     or "raop_rtp_mirror->running is no longer true" in line
