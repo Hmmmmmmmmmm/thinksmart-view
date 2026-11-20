@@ -19,6 +19,12 @@
 | **按需进阶** | **外网手机随时远程看家 / 双向视频通话** | Tailscale / Zerotier 异地组网，或 1 台公网云主机配置 SSH 反向隧道 | 选配（仅在家用局域网免配） | Tailscale 个人版免费 |
 | **完全免配** | **76 路广播/故事/评书、助眠声景、万年历、倒数日、留言板、番茄钟、AirPlay 投屏、蓝牙音箱、U 盘音乐、本机语音唤醒与 EdgeTTS 发声** | **无需任何账号或 Key，装完即用** | 开箱即用 | **0 元** |
 
+### AirPlay 自动播放
+
+在发送端选择 **ThinkSmart** 后，音频会由设备扬声器播放，屏幕镜像会自动显示。支持 HLS 的 UxPlay 默认也接受兼容应用的视频直投，例如 iPhone 上的 YouTube 应用。仅发送音频的应用只能播放声音。如需显示这类应用的画面，可从 iPhone 控制中心启动「屏幕镜像」。
+
+使用较旧的 UxPlay 时，音频和屏幕镜像仍可用。也可在 `thinksmart-airplay.service` 的用户服务配置中设置 `Environment=THINKSMART_AIRPLAY_DIRECT_VIDEO=0`，关闭 HLS 视频直投。
+
 ---
 
 ## 二、各项自备配置实操步骤

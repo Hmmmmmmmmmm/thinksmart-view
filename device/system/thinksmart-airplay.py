@@ -7,7 +7,8 @@ ThinkSmart View Unified AirPlay (Audio + High-FPS Screen Mirroring + Auto-Rotate
   and Adreno 506 GPU hardware wp_viewporter scaling via waylandsink with VSync clock pacing.
 - Uses a deterministic MAC derived from /etc/machine-id so AirPlay deviceid remains permanent
   across reboots and NetworkManager Wi-Fi MAC randomization.
-- Automatically pauses local QQ Music & active XiaoZhi session when AirPlay audio or mirroring starts,
+- Plays audio, screen mirroring and supported direct video automatically when the sender starts playback.
+- Automatically pauses local QQ Music & active XiaoZhi session when AirPlay playback starts,
   and coordinates cleanly with Intercom calls (/run/user/1000/intercom-call-active) and idle-blanker.
 """
 
@@ -47,6 +48,8 @@ def _should_log_uxplay_line(line: str, last_meta: dict) -> bool:
     if not s:
         return False
     if s.startswith("audio progress (min:sec):") or ("Audio Metadata" in s and s.startswith("===")):
+        return False
+    if s.lstrip("*").startswith("on_video_play: location = "):
         return False
     for mk in ("Album:", "Artist:", "Title:"):
         if s.startswith(mk):
@@ -550,7 +553,21 @@ def start_wayland_watchdog(get_proc, interval: float = 5.0, stop_event: threadin
     threading.Thread(target=_run, daemon=True, name="wayland-watchdog").start()
 
 
-def build_cmd() -> list[str]:
+def direct_video_enabled() -> bool:
+    if os.environ.get("THINKSMART_AIRPLAY_DIRECT_VIDEO") == "0":
+        return False
+    # Older distro packages can still receive audio and mirroring without HLS.
+    try:
+        help_text = subprocess.run(
+            [UXPLAY_BIN, "-h"], stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+            text=True, encoding="utf-8", errors="replace", timeout=5,
+        ).stdout
+    except (OSError, subprocess.TimeoutExpired):
+        return False
+    return re.search(r"(?m)^\s*-hls(?:\s|$)", help_text) is not None
+
+
+def build_cmd(*, direct_video: bool = False) -> list[str]:
     mac = get_deterministic_mac()
     return [
         "/usr/bin/stdbuf", "-oL", "-eL",
@@ -577,7 +594,7 @@ def build_cmd() -> list[str]:
         "-nohold",
         "-nofreeze",
         "-reset", "9",
-    ]
+    ] + (["-hls"] if direct_video else [])
 
 
 def stop_proc(proc: subprocess.Popen) -> None:
@@ -661,7 +678,9 @@ def main() -> int:
         return 0
     apply_system_tuning()
 
-    cmd = build_cmd()
+    direct_video = direct_video_enabled()
+    cmd = build_cmd(direct_video=direct_video)
+    log(f"direct AirPlay video: {'enabled' if direct_video else 'disabled'}")
     log(f"deterministic AirPlay MAC: {cmd[cmd.index('-m') + 1]}")
     start_wayland_watchdog(lambda: (current_proc, launch_ino), stop_event=shutdown_event)
     try:
@@ -692,7 +711,7 @@ def main() -> int:
                 stop_proc(proc)
                 break
             boost_process_priority(proc.pid)
-            mirror_active = False
+            video_mode = None
             audio_active = False
             last_meta = {}
             control_sockets: set[int] = set()
@@ -704,14 +723,13 @@ def main() -> int:
                     print(line, flush=True)
                 last_control_closed = _last_control_connection_closed(line, control_sockets)
 
-                if INTERCOM_FLAG_PATH.exists() and (mirror_active or audio_active):
+                if INTERCOM_FLAG_PATH.exists() and (video_mode or audio_active):
                     expected_restart = True
                     log("intercom call active -> yielding AirPlay session")
                     if audio_active:
                         audio_active = False
                         set_audio_active(False)
-                    if mirror_active:
-                        mirror_active = False
+                    if video_mode:
                         exit_mirror_turbo()
                     stop_proc(proc)
                     break
@@ -722,8 +740,7 @@ def main() -> int:
                     if audio_active:
                         audio_active = False
                         set_audio_active(False)
-                    if mirror_active:
-                        mirror_active = False
+                    if video_mode:
                         exit_mirror_turbo()
                     stop_proc(proc)
                     break
@@ -749,7 +766,15 @@ def main() -> int:
                     audio_active = False
                     set_audio_active(False)
 
-                if (
+                if direct_video and line.startswith("Will use GStreamer playbin version "):
+                    if INTERCOM_FLAG_PATH.exists():
+                        expected_restart = True
+                        stop_proc(proc)
+                        break
+                    video_mode = "direct"
+                    enter_mirror_turbo(proc.pid)
+
+                elif (
                     "raop_rtp_mirror starting mirroring" in line
                     or "Begin streaming to GStreamer video pipeline" in line
                 ):
@@ -757,10 +782,25 @@ def main() -> int:
                         expected_restart = True
                         stop_proc(proc)
                         break
-                    mirror_active = True
+                    video_mode = "mirror"
                     enter_mirror_turbo(proc.pid)
 
-                elif mirror_active and (
+                elif video_mode == "direct":
+                    if (
+                        last_control_closed
+                        or line.startswith("GStreamer error (video):")
+                        or "lost connection with client" in line
+                    ):
+                        expected_restart = True
+                        stop_proc(proc)
+                        break
+                    if line.lstrip("* ") == "on_video_stop" or line.strip().startswith(
+                        ("hls video has sent EOS", "video has finished,")
+                    ):
+                        video_mode = None
+                        exit_mirror_turbo()
+
+                elif video_mode == "mirror" and (
                     last_control_closed
                     or "raop_rtp_mirror tcp socket was closed" in line
                     or "raop_rtp_mirror tcp socket is closed" in line
@@ -771,14 +811,16 @@ def main() -> int:
                     or "xdg_wm_base" in line
                     or "Error communicating with wayland" in line
                 ):
-                    log("mirroring stopped -> restoring UI & closing video window immediately")
-                    expected_restart = True
-                    mirror_active = False
+                    log("mirroring stopped -> restoring UI")
+                    video_mode = None
                     audio_active = False
                     set_audio_active(False)
                     exit_mirror_turbo()
-                    stop_proc(proc)
-                    break
+                    # UxPlay can stop RTP mirroring while switching to direct video.
+                    if not direct_video or "lost connection with client" in line or "xdg_wm_base" in line:
+                        expected_restart = True
+                        stop_proc(proc)
+                        break
 
             rc = proc.wait()
             if proc.stdout is not None:
